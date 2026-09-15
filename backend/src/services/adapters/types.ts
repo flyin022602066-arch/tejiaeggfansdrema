@@ -78,6 +78,8 @@ export interface AIConfig {
   baseUrl: string
   apiKey: string
   model: string
+  endpoint?: string | null
+  queryEndpoint?: string | null
 }
 
 export interface ImageGenerationRecord {

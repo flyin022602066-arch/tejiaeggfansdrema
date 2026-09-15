@@ -67,14 +67,17 @@ export async function generateImage(params: GenerateImageParams): Promise<number
     : await getActiveConfig('image')
   if (!config) throw new Error('未配置图片模型，请先到「设置」页添加并启用 AI 服务')
 
-  const id = await createTask('image', config, {
+  const selectedModel = params.model || config.model
+  const taskConfig = selectedModel === config.model ? config : { ...config, model: selectedModel }
+
+  const id = await createTask('image', taskConfig, {
     storyboardId: params.storyboardId,
     dramaId: params.dramaId,
     sceneId: params.sceneId,
     characterId: params.characterId,
     propId: params.propId,
     prompt: params.prompt,
-    model: params.model || config.model,
+    model: selectedModel,
   }, {
     size: params.size || '1920x1080',
     frameType: params.frameType,
@@ -105,11 +108,14 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     : await getActiveConfig('video')
   if (!config) throw new Error('未配置视频模型，请先到「设置」页添加并启用 AI 服务')
 
-  const id = await createTask('video', config, {
+  const selectedModel = params.model || config.model
+  const taskConfig = selectedModel === config.model ? config : { ...config, model: selectedModel }
+
+  const id = await createTask('video', taskConfig, {
     storyboardId: params.storyboardId,
     dramaId: params.dramaId,
     prompt: params.prompt,
-    model: params.model || config.model,
+    model: selectedModel,
   }, {
     referenceMode: params.referenceMode || 'reference',
     imageUrl: params.imageUrl,

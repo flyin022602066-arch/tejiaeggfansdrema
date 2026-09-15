@@ -13,6 +13,8 @@ export interface AIConfig {
   baseUrl: string
   apiKey: string
   model: string
+  endpoint?: string | null
+  queryEndpoint?: string | null
   /** 采样温度，null 表示不设置（跟随服务商默认）。存于 ai_service_configs.settings JSON */
   temperature?: number | null
 }
@@ -29,9 +31,9 @@ export function parseConfigTemperature(settingsRaw: string | null | undefined): 
 }
 
 export const officialProviders: Record<ServiceType, readonly string[]> = {
-  text: ['openai', 'gemini', 'volcengine'],
-  image: ['openai', 'gemini', 'volcengine'],
-  video: ['volcengine', 'minimax', 'aliyun'],
+  text: ['openai', 'gemini', 'volcengine', 'eggfans'],
+  image: ['openai', 'gemini', 'volcengine', 'eggfans'],
+  video: ['volcengine', 'minimax', 'eggfans'],
 }
 
 export function isOfficialProvider(serviceType?: string | null, provider?: string | null): boolean {
@@ -91,6 +93,8 @@ export async function getActiveConfig(serviceType: ServiceType): Promise<AIConfi
     baseUrl: active.baseUrl,
     apiKey: active.apiKey,
     model: models[0] || '',
+    endpoint: active.endpoint,
+    queryEndpoint: active.queryEndpoint,
     temperature: parseConfigTemperature(active.settings),
   }
 }
@@ -144,6 +148,8 @@ export async function getConfigById(id: number): Promise<AIConfig | null> {
     baseUrl: row.baseUrl,
     apiKey: row.apiKey,
     model: models[0] || '',
+    endpoint: row.endpoint,
+    queryEndpoint: row.queryEndpoint,
     temperature: parseConfigTemperature(row.settings),
   }
 }

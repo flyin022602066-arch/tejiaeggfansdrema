@@ -7,7 +7,8 @@ import { GeminiImageAdapter } from './gemini-image'
 import { VolcEngineImageAdapter } from './volcengine-image'
 import { VolcEngineVideoAdapter } from './volcengine-video'
 import { MiniMaxVideoAdapter } from './minimax-video'
-import { AliyunWanVideoAdapter } from './aliyun-wan-video'
+import { EggfansImageAdapter } from './eggfans-image'
+import { EggfansVideoAdapter } from './eggfans-video'
 import type { ImageProviderAdapter, VideoProviderAdapter } from './types'
 
 // 图片 Adapter 注册表
@@ -15,13 +16,14 @@ export const imageAdapters: Record<string, ImageProviderAdapter> = {
   openai: new OpenAIImageAdapter(),
   gemini: new GeminiImageAdapter(),
   volcengine: new VolcEngineImageAdapter(),
+  eggfans: new EggfansImageAdapter(),
 }
 
 // 视频 Adapter 注册表
 export const videoAdapters: Record<string, VideoProviderAdapter> = {
   volcengine: new VolcEngineVideoAdapter(),
   minimax: new MiniMaxVideoAdapter(),
-  aliyun: new AliyunWanVideoAdapter(),
+  eggfans: new EggfansVideoAdapter(),
 }
 
 /**

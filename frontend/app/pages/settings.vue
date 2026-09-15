@@ -507,6 +507,14 @@
           </label>
           <label class="field"><span class="field-label">API Key</span><input v-model="cfgForm.api_key" class="input" type="password" placeholder="sk-..." /></label>
           <label class="field"><span class="field-label">Base URL</span><input v-model="cfgForm.base_url" class="input" placeholder="https://..." /></label>
+          <label v-if="cfgForm.provider === 'eggfans'" class="field">
+            <span class="field-label">Endpoint</span>
+            <input v-model="cfgForm.endpoint" class="input mono" :placeholder="cfgForm.service_type === 'video' ? '/videos' : cfgForm.service_type === 'image' ? '/images/generations' : '/chat/completions'" />
+          </label>
+          <label v-if="cfgForm.provider === 'eggfans' && cfgForm.service_type === 'video'" class="field">
+            <span class="field-label">Query Endpoint</span>
+            <input v-model="cfgForm.query_endpoint" class="input mono" placeholder="/videos/{taskId}" />
+          </label>
           <label class="field"><span class="field-label">{{ t('settings.cfg.models') }}</span><input v-model="cfgForm.modelStr" class="input" placeholder="model-name" /></label>
           <label v-if="cfgForm.service_type === 'text'" class="field">
             <span class="field-label">Temperature <span class="dim">({{ t('settings.cfg.tempHint') }})</span></span>
@@ -684,14 +692,14 @@ const cfgTesting = ref(false)
 const cfgTestResult = ref(null)
 const huobaoApiKey = ref('')
 const huobaoSaving = ref(false)
-const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', modelStr: '', service_type: 'text', priority: 0, temperature: '' })
+const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', endpoint: '', query_endpoint: '', modelStr: '', service_type: 'text', priority: 0, temperature: '' })
 // 服务类型 label/desc 渲染时求值（语言切换即时生效），type 为逻辑值
 const serviceTypes = computed(() => [
   { type: 'text', label: t('common.serviceType.text') },
   { type: 'image', label: t('common.serviceType.image') },
   { type: 'video', label: t('common.serviceType.video') },
 ])
-const providers = ['gemini', 'openai', 'volcengine', 'minimax', 'aliyun']
+const providers = ['eggfans', 'gemini', 'openai', 'volcengine', 'minimax', 'aliyun']
 const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
 const serviceMeta = computed(() => ({
   text: { label: t('common.serviceType.text'), desc: t('settings.ai.meta.text') },
@@ -799,7 +807,7 @@ async function applyHuobaoQuickConfig() {
 function startAddCfg(t) {
   cfgEditId.value = null
   cfgTestResult.value = null
-  Object.assign(cfgForm, { name: '', provider: '', api_key: '', base_url: '', modelStr: '', service_type: t, priority: 0, temperature: '' })
+  Object.assign(cfgForm, { name: '', provider: '', api_key: '', base_url: '', endpoint: '', query_endpoint: '', modelStr: '', service_type: t, priority: 0, temperature: '' })
   const firstPreset = presetsByType(t)[0]
   if (firstPreset) applyProviderPreset(t, firstPreset.provider)
   cfgDialog.value = true
@@ -812,6 +820,8 @@ function startEditCfg(c) {
     provider: c.provider,
     api_key: c.api_key || '',
     base_url: c.base_url || '',
+    endpoint: c.endpoint || '',
+    query_endpoint: c.query_endpoint || '',
     modelStr: fmtModel(c.model),
     service_type: c.service_type,
     priority: c.priority ?? 0,
@@ -837,6 +847,8 @@ async function testDraftCfg() {
     provider: cfgForm.provider,
     api_key: cfgForm.api_key,
     base_url: cfgForm.base_url,
+    endpoint: cfgForm.endpoint,
+    query_endpoint: cfgForm.query_endpoint,
     model: cfgForm.modelStr.split(',').map(s => s.trim()).filter(Boolean),
   })
 }
@@ -847,6 +859,8 @@ async function testExistingCfg(c) {
     provider: c.provider,
     api_key: c.api_key || '',
     base_url: c.base_url || '',
+    endpoint: c.endpoint || '',
+    query_endpoint: c.query_endpoint || '',
     model: Array.isArray(c.model) ? c.model : [],
   })
 }
@@ -858,8 +872,9 @@ async function saveCfg() {
     toast.warning(t('settings.cfg.tempInvalid')); return
   }
   try {
-    if (cfgEditId.value) await aiConfigAPI.update(cfgEditId.value, { name: cfgForm.name, provider: cfgForm.provider, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority, temperature })
-    else await aiConfigAPI.create({ service_type: cfgForm.service_type, provider: cfgForm.provider, name: cfgForm.name || `${cfgForm.provider}-${cfgForm.service_type}`, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority, temperature })
+    const payload = { name: cfgForm.name, provider: cfgForm.provider, api_key: cfgForm.api_key, base_url: cfgForm.base_url, endpoint: cfgForm.endpoint, query_endpoint: cfgForm.query_endpoint, model: models, priority: cfgForm.priority, temperature }
+    if (cfgEditId.value) await aiConfigAPI.update(cfgEditId.value, payload)
+    else await aiConfigAPI.create({ ...payload, service_type: cfgForm.service_type, name: cfgForm.name || `${cfgForm.provider}-${cfgForm.service_type}` })
     cfgDialog.value = false; toast.success(t('common.saved')); loadCfgs()
   } catch (e) { toastError(e) }
 }

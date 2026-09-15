@@ -24,6 +24,27 @@ export function joinProviderUrl(baseUrl: string, requiredPrefix: string, path: s
   }
 }
 
+export function joinConfiguredEndpoint(baseUrl: string, endpoint: string) {
+  const normalizedBase = (baseUrl || '').replace(/\/+$/, '')
+  const normalizedEndpoint = normalizeSegment(endpoint)
+
+  if (/^https?:\/\//i.test(endpoint)) return endpoint
+  if (!normalizedBase) return normalizedEndpoint
+
+  try {
+    const url = new URL(normalizedBase)
+    const currentPath = url.pathname.replace(/\/+$/, '')
+    url.pathname = currentPath && (normalizedEndpoint === currentPath || normalizedEndpoint.startsWith(`${currentPath}/`))
+      ? normalizedEndpoint
+      : `${currentPath}${normalizedEndpoint}`.replace(/\/{2,}/g, '/')
+    return url.toString()
+  } catch {
+    return normalizedBase.endsWith(normalizedEndpoint)
+      ? normalizedBase
+      : `${normalizedBase}${normalizedEndpoint}`
+  }
+}
+
 function normalizeSegment(segment: string) {
   if (!segment) return ''
   return segment.startsWith('/') ? segment : `/${segment}`

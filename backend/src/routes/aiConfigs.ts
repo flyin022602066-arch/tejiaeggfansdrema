@@ -61,7 +61,7 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
     }
   }
 
-  if (p === 'openai') {
+  if (p === 'openai' || p === 'eggfans') {
     return {
       method: 'GET',
       url: joinProviderUrl(baseUrl, '/v1', '/models'),
@@ -154,6 +154,8 @@ app.post('/', async (c) => {
     baseUrl: body.base_url || '',
     apiKey: body.api_key || '',
     model: JSON.stringify(body.model || []),
+    endpoint: body.endpoint || null,
+    queryEndpoint: body.query_endpoint || null,
     priority: body.priority || 0,
     isActive: true,
     settings: temperature !== null ? JSON.stringify({ temperature }) : null,
@@ -268,6 +270,8 @@ app.put('/:id', async (c) => {
   if ('base_url' in body) updates.baseUrl = body.base_url
   if ('api_key' in body) updates.apiKey = body.api_key
   if ('model' in body) updates.model = JSON.stringify(body.model)
+  if ('endpoint' in body) updates.endpoint = body.endpoint || null
+  if ('query_endpoint' in body) updates.queryEndpoint = body.query_endpoint || null
   if ('priority' in body) updates.priority = body.priority
   if ('is_active' in body) updates.isActive = body.is_active
   if ('temperature' in body) {
