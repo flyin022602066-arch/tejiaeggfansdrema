@@ -13,6 +13,20 @@
 
 EggFans 视频创建使用 `POST /v1/videos`，任务查询使用 `GET /v1/videos/{taskId}`。配置中的 `base_url` 仍然作为可覆盖项；新建/手动配置的默认提示指向 `https://vip.eggfans.asia`。
 
+### `sd-2.5-A` 模型约束
+
+标准 EggFans 视频配置默认使用且只预置模型调用名 `sd-2.5-A`。提交请求前由前后端共同校验以下约束：
+
+- 时长：整数 `4`–`30` 秒（含边界）；超出范围时阻止提交并显示明确错误，不静默截断。
+- 分辨率：固定为 `720p`；前端只展示 `720p`，后端向 EggFans 发送的 `resolution` 始终为 `720p`。
+- 参考图片：`image_refs` 最多 `30` 个。
+- 参考视频：`video_refs` 最多 `10` 个。
+- 参考音频：`audio_refs` 最多 `10` 个。
+- 支持首帧与尾帧：分别使用 `first_image`、`last_image`。
+- 按接口规则，`first_image`/`last_image` 与 `image_refs`/`video_refs`/`audio_refs` 两种模式不能同时提交；发生冲突时阻止提交并说明应选择“首尾帧”或“多素材参考”模式。
+
+参考图片、视频和音频必须是公网可访问的 HTTPS URL。本地 `static/` 素材使用现有 `PUBLIC_BASE_URL` 转为公网 URL；未配置公网地址时返回可操作的错误，不向 EggFans 提交无效的本机路径或 data URL。
+
 内部请求字段映射如下：
 
 | 现有内部字段 | EggFans 字段 |
@@ -28,7 +42,7 @@ EggFans 视频创建使用 `POST /v1/videos`，任务查询使用 `GET /v1/video
 | `firstFrameUrl`，回退 `imageUrl` | `first_image` |
 | `lastFrameUrl` | `last_image` |
 
-空值字段不发送。现有 `generate_audio` 只在 EggFans 视频请求中继续透传；接口文档未定义的内部控制字段不发送。参考素材仍由后端统一转换为可访问 URL/数据，遵守现有安全和本地文件处理逻辑。
+空值字段不发送。`generate_audio` 及其他接口文档未定义的内部控制字段不发送。参考素材仍由后端统一转换为公网可访问 URL，遵守现有安全和本地文件处理逻辑。
 
 ## 余额入口
 
@@ -46,9 +60,14 @@ EggFans 视频创建使用 `POST /v1/videos`，任务查询使用 `GET /v1/video
 新增/更新离线结构和适配器单元测试，覆盖：
 
 1. 标准视频请求使用 `/v1/videos` 并发送文档字段。
-2. 参考图、参考视频、参考音频、首帧和尾帧字段映射正确，空值不发送。
-3. 自定义 endpoint/query endpoint 仍可覆盖默认路径。
-4. 文本/图片 EggFans 适配器和其他视频供应商没有被改动。
-5. 设置页包含新的视频 Base URL/余额查询提示。
+2. 默认模型精确为 `sd-2.5-A`，分辨率精确为 `720p`。
+3. `4` 秒与 `30` 秒可提交，低于 `4` 秒或高于 `30` 秒会被拒绝。
+4. `30` 图、`10` 视频、`10` 音频可提交，任一类型超限会被拒绝。
+5. 参考图、参考视频、参考音频、首帧和尾帧字段映射正确，空值不发送。
+6. 首尾帧模式与多素材参考模式不能同时提交。
+7. 本地参考素材仅在可转为公网 HTTPS URL 时提交；缺少 `PUBLIC_BASE_URL` 时明确失败。
+8. 自定义 endpoint/query endpoint 仍可覆盖默认路径。
+9. 文本/图片 EggFans 适配器和其他视频供应商没有被改动。
+10. 设置页包含新的视频 Base URL、`sd-2.5-A` 参数约束和余额查询入口。
 
 验证命令：后端 `npm run typecheck`；EggFans 适配器测试；前端 `npm run generate`。
