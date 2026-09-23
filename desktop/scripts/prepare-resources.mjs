@@ -33,36 +33,57 @@ const workspaceSrc = path.join(REPO, 'backend', 'workspace')
 fs.cpSync(workspaceSrc, path.join(RES, 'workspace-template'), { recursive: true })
 console.log('resources/workspace-template ✓')
 
-// 3. ffmpeg 二进制（macOS/Linux 用 ffmpeg-static 当前平台的产物；
-//    Windows 交叉打包：ffmpeg.exe 从 ffmpeg-static GitHub release 获取（本地缓存），
-//    ffprobe.exe 直接用 ffprobe-static 自带的 win32/x64 产物）
+// 3. ffmpeg 二进制。目录名必须与 electron-builder 的 ${os} 值一致：
+//    darwin / win32。优先使用 desktop 依赖，包壳存在但二进制缺失时回退 backend 依赖。
 const req = createRequire(import.meta.url)
-const binMac = path.join(RES, 'bin-mac')
-const binWin = path.join(RES, 'bin-win')
-fs.mkdirSync(binMac, { recursive: true })
-fs.mkdirSync(binWin, { recursive: true })
-const ffmpegPath = req('ffmpeg-static')
-const ffprobePath = req('ffprobe-static')?.path
-if (!ffmpegPath || !ffprobePath || !fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
-  console.error('ffmpeg-static/ffprobe-static 二进制缺失，请重新 npm install（或配置 FFMPEG_BINARIES_URL 镜像）')
-  process.exit(1)
-}
-fs.copyFileSync(ffmpegPath, path.join(binMac, 'ffmpeg'))
-fs.copyFileSync(ffprobePath, path.join(binMac, 'ffprobe'))
-fs.chmodSync(path.join(binMac, 'ffmpeg'), 0o755)
-fs.chmodSync(path.join(binMac, 'ffprobe'), 0o755)
-console.log('resources/bin-mac ✓')
+const backendReq = createRequire(path.join(REPO, 'backend', 'package.json'))
+const binDarwin = path.join(RES, 'bin-darwin')
+const binWin32 = path.join(RES, 'bin-win32')
 
-// 3b. Windows 二进制（打 win 包用；不打 win 包时缺失不报错，仅提示）
+function resolveBinary(moduleName) {
+  for (const resolver of [req, backendReq]) {
+    try {
+      const mod = resolver(moduleName)
+      const candidate = moduleName === 'ffprobe-static' ? mod?.path : mod
+      if (candidate && fs.existsSync(candidate)) return candidate
+    } catch { /* 尝试下一个依赖根 */ }
+  }
+  return null
+}
+
+const currentFfmpeg = resolveBinary('ffmpeg-static')
+const currentFfprobe = resolveBinary('ffprobe-static')
+if (currentFfmpeg && currentFfprobe) {
+  const targetDir = process.platform === 'win32' ? binWin32 : binDarwin
+  const exe = process.platform === 'win32' ? '.exe' : ''
+  fs.mkdirSync(targetDir, { recursive: true })
+  fs.copyFileSync(currentFfmpeg, path.join(targetDir, `ffmpeg${exe}`))
+  fs.copyFileSync(currentFfprobe, path.join(targetDir, `ffprobe${exe}`))
+  if (!exe) {
+    fs.chmodSync(path.join(targetDir, 'ffmpeg'), 0o755)
+    fs.chmodSync(path.join(targetDir, 'ffprobe'), 0o755)
+  }
+  console.log(`resources/bin-${process.platform} ✓`)
+}
+
+// 3b. macOS/Linux 交叉打 Windows 包时可使用预先缓存的 Windows 二进制。
 const winBinDir = path.join(DESKTOP, 'build', 'win-bin')
 const ffmpegWin = path.join(winBinDir, 'ffmpeg.exe')
 const ffprobeWinSrc = path.join(path.dirname(req.resolve('ffprobe-static/package.json')), 'bin', 'win32', 'x64', 'ffprobe.exe')
-if (!fs.existsSync(ffmpegWin)) {
+if (fs.existsSync(ffmpegWin) && fs.existsSync(ffprobeWinSrc)) {
+  fs.mkdirSync(binWin32, { recursive: true })
+  fs.copyFileSync(ffmpegWin, path.join(binWin32, 'ffmpeg.exe'))
+  fs.copyFileSync(ffprobeWinSrc, path.join(binWin32, 'ffprobe.exe'))
+  console.log('resources/bin-win32 ✓')
+} else if (process.platform !== 'win32') {
   console.warn('提示: 缺少 build/win-bin/ffmpeg.exe，Windows 包将无法内置 ffmpeg。' +
     '获取: https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-win32-x64')
 }
-if (fs.existsSync(ffmpegWin) && fs.existsSync(ffprobeWinSrc)) {
-  fs.copyFileSync(ffmpegWin, path.join(binWin, 'ffmpeg.exe'))
-  fs.copyFileSync(ffprobeWinSrc, path.join(binWin, 'ffprobe.exe'))
-  console.log('resources/bin-win ✓')
+
+const currentTargetDir = process.platform === 'win32' ? binWin32 : binDarwin
+const currentExe = process.platform === 'win32' ? '.exe' : ''
+if (!fs.existsSync(path.join(currentTargetDir, `ffmpeg${currentExe}`))
+  || !fs.existsSync(path.join(currentTargetDir, `ffprobe${currentExe}`))) {
+  console.error('ffmpeg-static/ffprobe-static 本机二进制缺失，请重新 npm install（或配置 FFMPEG_BINARIES_URL 镜像）')
+  process.exit(1)
 }

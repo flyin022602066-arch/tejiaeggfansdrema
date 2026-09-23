@@ -1,13 +1,23 @@
 import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
-import { success, created, badRequest, now } from '../utils/response.js'
+import { success, created, badRequest, notFound, now } from '../utils/response.js'
+import { toSnakeCase } from '../utils/transform.js'
 import { generateImage } from '../services/generation.js'
 import { getDramaStylePrompt } from '../services/style-preset.js'
+import { composeAssetGenerationPrompt } from '../services/prompt-style.js'
 import { ensureSceneFinalPrompt } from '../services/final-prompt.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
+
+// GET /scenes/:id - refresh one asset card without reloading the workbench
+app.get('/:id', async (c) => {
+  const id = Number(c.req.param('id'))
+  const [row] = await db.select().from(schema.scenes).where(eq(schema.scenes.id, id))
+  if (!row || row.deletedAt) return notFound(c)
+  return success(c, toSnakeCase(row))
+})
 
 // POST /scenes — 手动新增场景（传入 episode_id 时关联到该集）
 app.post('/', async (c) => {
@@ -54,6 +64,8 @@ app.put('/:id', async (c) => {
     updates.imageUrl = uploadedImage
     if (uploadedImage) updates.status = 'completed'
   }
+  if (body.public_url !== undefined) updates.publicUrl = body.public_url
+  else if (body.publicUrl !== undefined) updates.publicUrl = body.publicUrl
   if (body.local_path !== undefined) updates.localPath = body.local_path
   else if (body.localPath !== undefined) updates.localPath = body.localPath
   // 手动编辑最终提示词时以传入值为准；未传入则保留原值（修改信息时不再自动置空）
@@ -76,18 +88,21 @@ app.post('/:id/generate-image', async (c) => {
   const stylePrompt = await getDramaStylePrompt(scene.dramaId)
   const finalPrompt = await ensureSceneFinalPrompt(scene, ep.id, false, { model: body.text_model, configId: body.text_config_id ?? undefined })
   // 回退拼接也要守住无人物约束：场景描述(prompt)可能含人物活动，直接拼会让人混进图里
-  const prompt = finalPrompt || [
-    stylePrompt || '',
+  const assetPrompt = finalPrompt || [
     scene.location,
     scene.time || '',
     scene.prompt || '高质量场景',
     scene.lighting || '电影感光影',
     '画面中没有任何人物，空场景，只有场景本身',
   ].filter(Boolean).join(', ')
+  const prompt = [
+    composeAssetGenerationPrompt(stylePrompt, assetPrompt, 'scene'),
+    body.prompt_suffix,
+  ].filter(Boolean).join(', ')
   try {
     logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location })
     await db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id))
-    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, model: body.model, configId: body.config_id ?? ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, model: body.model, size: body.size, quality: body.quality, moderation: body.moderation, format: body.format, responseFormat: body.response_format, n: body.n, configId: body.config_id ?? ep.imageConfigId ?? undefined })
     logTaskSuccess('SceneImage', 'generate', { sceneId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

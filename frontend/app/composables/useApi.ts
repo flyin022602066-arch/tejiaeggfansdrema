@@ -1,5 +1,15 @@
 const BASE = '/api/v1'
 
+export interface ImageGenerationOptions {
+  size?: string
+  quality?: string
+  moderation?: 'auto' | 'low'
+  format?: string
+  response_format?: 'url' | 'b64_json'
+  n?: number
+  prompt_suffix?: string
+}
+
 async function req<T = any>(method: string, path: string, body?: any): Promise<T> {
   const opts: RequestInit = { method, headers: { 'Content-Type': 'application/json' } }
   if (body) opts.body = JSON.stringify(body)
@@ -65,28 +75,32 @@ export const storyboardAPI = {
 }
 
 export const characterAPI = {
+  get: (id: number) => api.get(`/characters/${id}`),
   create: (data: any) => api.post('/characters', data),
   update: (id: number, data: any) => api.put(`/characters/${id}`, data),
   del: (id: number) => api.del(`/characters/${id}`),
   generatePrompt: (id: number, episodeId: number, force = false, textModel?: string, textConfigId?: number) => api.post(`/characters/${id}/generate-prompt`, { episode_id: episodeId, force, text_model: textModel || undefined, text_config_id: textConfigId || undefined }),
-  generateImage: (id: number, episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number) => api.post(`/characters/${id}/generate-image`, { episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined }),
-  batchImages: (ids: number[], episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number) => api.post('/characters/batch-generate-images', { character_ids: ids, episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined }),
+  generateImage: (id: number, episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number, options: ImageGenerationOptions = {}) => api.post(`/characters/${id}/generate-image`, { episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined, ...options }),
+  batchImages: (ids: number[], episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number, options: ImageGenerationOptions = {}) => api.post('/characters/batch-generate-images', { character_ids: ids, episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined, ...options }),
+  virtualAsset: (id: number) => api.post<{ asset_id: string | null; asset_uri: string; status: string | null; source_url: string | null }>(`/characters/${id}/virtual-asset`, {}),
 }
 
 export const sceneAPI = {
+  get: (id: number) => api.get(`/scenes/${id}`),
   create: (data: any) => api.post('/scenes', data),
   update: (id: number, data: any) => api.put(`/scenes/${id}`, data),
   del: (id: number) => api.del(`/scenes/${id}`),
   generatePrompt: (id: number, episodeId: number, force = false, textModel?: string, textConfigId?: number) => api.post(`/scenes/${id}/generate-prompt`, { episode_id: episodeId, force, text_model: textModel || undefined, text_config_id: textConfigId || undefined }),
-  generateImage: (id: number, episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number) => api.post(`/scenes/${id}/generate-image`, { episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined }),
+  generateImage: (id: number, episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number, options: ImageGenerationOptions = {}) => api.post(`/scenes/${id}/generate-image`, { episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined, ...options }),
 }
 
 export const propAPI = {
+  get: (id: number) => api.get(`/props/${id}`),
   create: (data: any) => api.post('/props', data),
   update: (id: number, data: any) => api.put(`/props/${id}`, data),
   del: (id: number) => api.del(`/props/${id}`),
   generatePrompt: (id: number, episodeId: number, force = false, textModel?: string, textConfigId?: number) => api.post(`/props/${id}/generate-prompt`, { episode_id: episodeId, force, text_model: textModel || undefined, text_config_id: textConfigId || undefined }),
-  generateImage: (id: number, episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number) => api.post(`/props/${id}/generate-image`, { episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined }),
+  generateImage: (id: number, episodeId: number, model?: string, configId?: number, textModel?: string, textConfigId?: number, options: ImageGenerationOptions = {}) => api.post(`/props/${id}/generate-image`, { episode_id: episodeId, model: model || undefined, config_id: configId || undefined, text_model: textModel || undefined, text_config_id: textConfigId || undefined, ...options }),
 }
 
 // 统一生成任务（图片/视频）：POST 带 type 字段，列表按 type 过滤
@@ -119,9 +133,10 @@ async function uploadReq<T = any>(path: string, file: File): Promise<T> {
 }
 
 export const uploadAPI = {
-  image: (f: File) => uploadReq<{ url: string; path: string }>('/upload/image', f),
+  image: (f: File) => uploadReq<{ url: string; path: string; public_url: string | null; public_upload_error: string | null }>('/upload/image', f),
   video: (f: File) => uploadReq<{ url: string; path: string }>('/upload/video', f),
   audio: (f: File) => uploadReq<{ url: string; path: string }>('/upload/audio', f),
+  assetPublicUrl: (kind: 'character' | 'scene' | 'prop', id: number) => api.post<{ public_url: string }>('/upload/asset-public-url', { kind, id }),
 }
 export const mergeAPI = {
   merge: (epId: number, storyboardIds?: number[]) => api.post(`/merge/episodes/${epId}/merge`, storyboardIds?.length ? { storyboard_ids: storyboardIds } : {}),
@@ -130,6 +145,7 @@ export const mergeAPI = {
 }
 export const aiConfigAPI = {
   list: (t?: string) => api.get(`/ai-configs${t ? `?service_type=${t}` : ''}`),
+  eggfansModels: () => api.get<string[]>('/ai-configs/eggfans-models'),
   create: (d: any) => api.post('/ai-configs', d),
   update: (id: number, d: any) => api.put(`/ai-configs/${id}`, d),
   del: (id: number) => api.del(`/ai-configs/${id}`),
@@ -168,6 +184,12 @@ export const storageAPI = {
 export const settingsAPI = {
   contentLanguage: () => api.get<{ language: string }>('/settings/content-language'),
   setContentLanguage: (language: string) => api.put('/settings/content-language', { language }),
+  imageHost: () => api.get<{ configured: boolean }>('/settings/image-host'),
+  setImageHost: (api_key: string) => api.put('/settings/image-host', { api_key }),
+  virtualAssets: () => api.get<{ configured: boolean; base_url: string }>('/settings/virtual-assets'),
+  setVirtualAssets: (api_key: string) => api.put<{ configured: boolean; base_url: string }>('/settings/virtual-assets', { api_key }),
+  videoReferenceMode: () => api.get<{ asset_reference_mode: 'uri' | 'url' }>('/settings/video-reference-mode'),
+  setVideoReferenceMode: (asset_reference_mode: 'uri' | 'url') => api.put<{ asset_reference_mode: 'uri' | 'url' }>('/settings/video-reference-mode', { asset_reference_mode }),
 }
 
 // 服务器/Docker 部署的版本检查与更新（桌面版走 useDesktopBridge，不用此 API）

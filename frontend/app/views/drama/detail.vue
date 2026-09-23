@@ -383,6 +383,21 @@
                     <strong>{{ editTarget.kindKey === 'character' ? (editTarget.role || t('common.role')) : editTarget.kindKey === 'prop' ? (editTarget.type || t('common.prop')) : (editTarget.time || t('episode.asset.noTime')) }}</strong>
                   </div>
                 </div>
+                <div class="mat-detail-public">
+                  <div class="mat-detail-public-head">
+                    <span>{{ t('episode.asset.publicUrl') }}</span>
+                    <span :class="['mat-detail-state', matPublicUrl(editTarget) ? 'is-ready' : '']">
+                      {{ matPublicUrl(editTarget) ? t('episode.asset.publicUrlReady') : t('episode.asset.publicUrlMissing') }}
+                    </span>
+                  </div>
+                  <a v-if="matPublicUrl(editTarget)" :href="matPublicUrl(editTarget)" target="_blank" rel="noopener" class="mat-detail-public-link">{{ matPublicUrl(editTarget) }}</a>
+                  <div v-else class="mat-detail-public-empty">
+                    <span>{{ matHasImage(editTarget) ? t('episode.asset.publicUrlRetryHint') : t('episode.asset.publicUrlImageFirst') }}</span>
+                    <button v-if="matHasImage(editTarget)" class="btn btn-sm" :disabled="isUploadingPublic(editTarget)" @click="retryMaterialPublicUrl(editTarget)">
+                      {{ isUploadingPublic(editTarget) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
+                    </button>
+                  </div>
+                </div>
               </aside>
 
               <!-- 右侧：编辑信息 -->
@@ -808,15 +823,16 @@ function uploadMaterial(m) {
     try {
       const res = await uploadAPI.image(file)
       // 与生图回写保持一致：存相对路径（static/...），展示时补前导斜杠
-      const payload = { image_url: res.path, local_path: res.path }
+      const payload = { image_url: res.path, local_path: res.path, public_url: res.public_url || null }
       if (m.kindKey === 'character') await characterAPI.update(m.id, payload)
       else if (m.kindKey === 'scene') await sceneAPI.update(m.id, payload)
       else await propAPI.update(m.id, payload)
-      toast.success(t('detail.mat.uploaded', { kind: m.kind, name: m.name }))
+      if (res.public_url) toast.success(t('episode.upload.assetDoneWithPublicUrl', { type: m.kind }))
+      else toast.warning(t('episode.upload.assetDonePublicFailed', { error: res.public_upload_error || t('episode.asset.publicUploadFailed') }))
       await load()
       // 详情弹窗打开时同步刷新预览
       if (editTarget.value && editTarget.value.kindKey === m.kindKey && editTarget.value.id === m.id) {
-        editTarget.value = { ...editTarget.value, image_url: res.path, local_path: res.path }
+        editTarget.value = { ...editTarget.value, image_url: res.path, local_path: res.path, public_url: res.public_url || null }
       }
     } catch (e) {
       toastError(e)
@@ -883,6 +899,28 @@ async function generateFinalPrompt(m) {
     toastError(e)
   } finally {
     finalPromptGen.value = false
+  }
+}
+
+function matPublicUrl(m) { return String(m?.public_url || m?.publicUrl || '').trim() }
+const uploadingPublicMaterials = ref(new Set())
+function isUploadingPublic(m) { return uploadingPublicMaterials.value.has(pendingKey(m)) }
+async function retryMaterialPublicUrl(m) {
+  const key = pendingKey(m)
+  if (uploadingPublicMaterials.value.has(key)) return
+  uploadingPublicMaterials.value = new Set(uploadingPublicMaterials.value).add(key)
+  try {
+    await uploadAPI.assetPublicUrl(m.kindKey, m.id)
+    await load()
+    const fresh = materials.value.find(x => x.kindKey === m.kindKey && x.id === m.id)
+    if (fresh && editTarget.value?.kindKey === m.kindKey && editTarget.value?.id === m.id) editTarget.value = fresh
+    toast.success(t('episode.asset.publicUploadDone'))
+  } catch (e) {
+    toastError(e, { fallback: 'episode.asset.publicUploadFailed' })
+  } finally {
+    const next = new Set(uploadingPublicMaterials.value)
+    next.delete(key)
+    uploadingPublicMaterials.value = next
   }
 }
 
@@ -1590,6 +1628,17 @@ onMounted(load)
 }
 
 /* 编辑区域 */
+.mat-detail-public {
+  display: flex; flex-direction: column; gap: 7px; margin-top: 8px;
+  padding: 10px; border: 1px solid var(--surface-outline);
+  border-radius: var(--radius); background: var(--surface-muted);
+}
+.mat-detail-public-head,
+.mat-detail-public-empty { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mat-detail-public-head > span:first-child { color: var(--text-2); font-size: 11px; font-weight: 720; }
+.mat-detail-public-link { overflow-wrap: anywhere; color: var(--success); font-size: 11px; line-height: 1.45; }
+.mat-detail-public-empty > span { color: var(--text-3); font-size: 11px; line-height: 1.45; }
+
 .mat-detail-edit-grid {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
 }

@@ -8,6 +8,11 @@ import { db, schema } from '../../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../../utils/response.js'
 import { getEpisodeId } from '../context.js'
+import { repairProviderText } from '../../services/ai.js'
+
+// Some HTTP clients on Windows historically decoded UTF-8 JSON as latin1.
+// Keep already-correct Chinese untouched, while repairing the characteristic
+// mojibake sequences before persisting generated scripts.
 
 const readEpisodeScript = createTool({
   id: 'read_episode_script',
@@ -67,11 +72,12 @@ const saveScript = createTool({
   execute: async ({ content }, context) => {
     const episodeId = getEpisodeId(context?.requestContext)
     if (!episodeId) return { error: 'Missing episodeId in request context' }
+    const safeContent = repairProviderText(content)
     await db.update(schema.episodes)
-      .set({ scriptContent: content, updatedAt: now() })
+      .set({ scriptContent: safeContent, updatedAt: now() })
       .where(eq(schema.episodes.id, episodeId))
 
-    return { message: `Script saved`, word_count: content.length }
+    return { message: `Script saved`, word_count: safeContent.length }
   },
 })
 

@@ -79,37 +79,57 @@
             <p class="settings-desc">{{ t('settings.ai.desc') }}</p>
           </div>
           <section class="card quick-card">
-            <div class="quick-card-head">
-              <div class="setup-title">{{ t('settings.ai.quickTitle') }}</div>
-              <span class="tag tag-accent">{{ t('settings.ai.recommended') }}</span>
-            </div>
-            <p class="setup-desc">
-              {{ t('settings.ai.quickDesc') }}
-              <a class="huobao-site-link" href="https://api.firemux.com" target="_blank" rel="noopener noreferrer">
+            <p class="setup-desc ai-key-link-only">
+              <a class="Eggfans-site-link" href="https://api.eggfans.com" target="_blank" rel="noopener noreferrer">
                 {{ t('settings.ai.getKey') }}
                 <ExternalLink :size="12" :stroke-width="1.8" />
               </a>
             </p>
-            <div class="huobao-quick-row">
-              <input v-model="huobaoApiKey" class="input" type="password" placeholder="Huobao API Key" />
-              <button class="btn btn-primary" :disabled="huobaoSaving" @click="applyHuobaoQuickConfig">
-                <Loader2 v-if="huobaoSaving" :size="13" class="animate-spin" />
-                <Sparkles v-else :size="13" />
-                {{ t('settings.ai.applyQuick') }}
-              </button>
+          </section>
+          <section class="card svc-group image-host-card">
+            <div class="svc-group-head">
+              <div class="svc-group-heading">
+                <span class="svc-group-title">{{ t('settings.ai.imageHostTitle') }}</span>
+                <div class="svc-group-sub">{{ t('settings.ai.imageHostDesc') }}</div>
+              </div>
+              <span :class="['tag', imageHostConfigured ? 'tag-success' : 'tag-error']">
+                {{ imageHostConfigured ? t('settings.ai.imageHostConfigured') : t('settings.ai.imageHostNotConfigured') }}
+              </span>
             </div>
-            <div class="huobao-quick-models">
-              <div v-for="q in huobaoQuickConfigs" :key="q.name" class="hqm-row">
-                <span class="hqm-label">{{ serviceMeta[q.service_type].label }}</span>
-                <span class="hqm-provider">
-                  <img v-if="providerIconUrl(q.provider)" :src="providerIconUrl(q.provider)" class="hqm-provider-icon" alt="" />
-                  {{ q.provider }}
-                </span>
-                <span class="hqm-models mono">
-                  <span v-for="(m, i) in q.model" :key="m" :class="['hqm-model', { 'is-default': i === 0 }]">
-                    {{ m }}<em v-if="i === 0">{{ t('common.default') }}</em>
-                  </span>
-                </span>
+            <div class="config-row image-host-row">
+              <div class="provider-badge style-badge"><ImageUp :size="15" /></div>
+              <div class="config-main">
+                <div class="config-line"><span class="config-name">Eggfans 图床</span></div>
+                <div class="config-sub"><a href="https://docs.eggfans.org/tutorials/image-host" target="_blank" rel="noopener noreferrer">{{ t('settings.ai.imageHostDocs') }}</a></div>
+              </div>
+              <div class="image-host-form">
+                <input v-model="imageHostKey" class="input mono" type="password" autocomplete="new-password" :placeholder="t('settings.ai.imageHostKeyPlaceholder')" />
+                <button class="btn btn-primary btn-sm" :disabled="imageHostSaving" @click="saveImageHostKey">{{ imageHostSaving ? t('common.loading') : t('common.save') }}</button>
+                <button v-if="imageHostConfigured" class="btn btn-ghost btn-sm" :disabled="imageHostSaving" @click="clearImageHostKey">{{ t('settings.ai.imageHostClear') }}</button>
+              </div>
+            </div>
+          </section>
+          <section class="card svc-group image-host-card">
+            <div class="svc-group-head">
+              <div class="svc-group-heading">
+                <span class="svc-group-title">{{ t('settings.ai.virtualAssetTitle') }}</span>
+                <div class="svc-group-sub">{{ t('settings.ai.virtualAssetDesc') }}</div>
+              </div>
+              <span :class="['tag', virtualAssetConfigured ? 'tag-success' : 'tag-error']">
+                {{ virtualAssetConfigured ? t('settings.ai.virtualAssetConfigured') : t('settings.ai.virtualAssetNotConfigured') }}
+              </span>
+            </div>
+            <div class="config-row image-host-row">
+              <div class="provider-badge style-badge"><Database :size="15" /></div>
+              <div class="config-main">
+                <div class="config-line"><span class="config-name">{{ t('settings.ai.virtualAssetService') }}</span></div>
+                <div class="config-sub mono">{{ virtualAssetBaseUrl }}</div>
+                <div class="config-sub"><a href="https://g7vb19zn31.apifox.cn/482415644e0" target="_blank" rel="noopener noreferrer">{{ t('settings.ai.virtualAssetDocs') }}</a></div>
+              </div>
+              <div class="image-host-form">
+                <input v-model="virtualAssetKey" class="input mono" type="password" autocomplete="new-password" :placeholder="t('settings.ai.virtualAssetKeyPlaceholder')" />
+                <button class="btn btn-primary btn-sm" :disabled="virtualAssetSaving" @click="saveVirtualAssetKey">{{ virtualAssetSaving ? t('common.loading') : t('common.save') }}</button>
+                <button v-if="virtualAssetConfigured" class="btn btn-ghost btn-sm" :disabled="virtualAssetSaving" @click="clearVirtualAssetKey">{{ t('settings.ai.virtualAssetClear') }}</button>
               </div>
             </div>
           </section>
@@ -505,17 +525,42 @@
             <input v-model.number="cfgForm.priority" class="input" type="number" min="0" max="999" />
             <span class="field-hint">{{ t('settings.cfg.priorityHint') }}</span>
           </label>
-          <label class="field"><span class="field-label">API Key</span><input v-model="cfgForm.api_key" class="input" type="password" placeholder="sk-..." /></label>
+          <label class="field"><span class="field-label">{{ cfgForm.provider === 'autodl' ? 'AutoDL Token' : 'API Key' }}</span><input v-model="cfgForm.api_key" class="input" type="password" :placeholder="cfgForm.provider === 'autodl' ? 'AutoDL Token' : 'sk-...'" /></label>
           <label class="field"><span class="field-label">Base URL</span><input v-model="cfgForm.base_url" class="input" placeholder="https://..." /></label>
-          <label v-if="cfgForm.provider === 'eggfans'" class="field">
+          <label v-if="cfgForm.provider === 'eggfans' || cfgForm.provider === 'autodl'" class="field">
             <span class="field-label">Endpoint</span>
-            <input v-model="cfgForm.endpoint" class="input mono" :placeholder="cfgForm.service_type === 'video' ? '/videos' : cfgForm.service_type === 'image' ? '/images/generations' : '/chat/completions'" />
+            <input v-model="cfgForm.endpoint" class="input mono" :placeholder="cfgForm.provider === 'autodl' ? '/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24' : cfgForm.service_type === 'video' ? '/v1/videos' : cfgForm.service_type === 'image' ? '/v1/images/generations' : '/chat/completions'" />
           </label>
-          <label v-if="cfgForm.provider === 'eggfans' && cfgForm.service_type === 'video'" class="field">
+          <label v-if="(cfgForm.provider === 'eggfans' || cfgForm.provider === 'autodl') && cfgForm.service_type === 'video'" class="field">
             <span class="field-label">Query Endpoint</span>
-            <input v-model="cfgForm.query_endpoint" class="input mono" placeholder="/videos/{taskId}" />
+            <input v-model="cfgForm.query_endpoint" class="input mono" :placeholder="cfgForm.provider === 'autodl' ? '/api/v1/comfyui/comfyui_workflow/result/{taskId}' : '/v1/videos/{taskId}'" />
+            <span v-if="cfgForm.provider === 'eggfans'" class="field-hint">
+              sd-2.5-C · 4–30 秒 · 720p · 最多 30 图 / 10 视频 / 10 音频
+              · <a class="Eggfans-site-link" href="https://vip.eggfans.work" target="_blank" rel="noopener noreferrer">余额查询 <ExternalLink :size="12" :stroke-width="1.8" /></a>
+            </span>
+            <span v-else class="field-hint">MiniMax H3 · 1–15 秒 · 480p / 768p · 最多 9 图 / 3 音频 · 不支持参考视频</span>
           </label>
-          <label class="field"><span class="field-label">{{ t('settings.cfg.models') }}</span><input v-model="cfgForm.modelStr" class="input" placeholder="model-name" /></label>
+          <label class="field">
+            <span class="field-label">
+              {{ t('settings.cfg.models') }}
+              <a v-if="cfgForm.provider === 'eggfans'" class="Eggfans-site-link" href="https://api.eggfans.com/pricing" target="_blank" rel="noopener noreferrer">
+                模型列表 <ExternalLink :size="12" :stroke-width="1.8" />
+              </a>
+            </span>
+            <div v-if="cfgForm.provider === 'eggfans' && eggfansModelOptions.length" class="eggfans-model-picker">
+              <div class="eggfans-model-picker-head"><span>Eggfans 模型（可多选）</span><span class="dim">已选 {{ cfgSelectedModels.length }} 个</span></div>
+              <div class="eggfans-model-picker-list">
+                <label v-for="m in eggfansModelOptions" :key="m" class="eggfans-model-option">
+                  <input v-model="cfgSelectedModels" type="checkbox" :value="m" @change="applyCfgModelPicker" />
+                  <span class="mono">{{ m }}</span>
+                </label>
+              </div>
+            </div>
+              <option value="">从 Eggfans 模型列表选择</option>
+              <option v-for="m in eggfansModelOptions" :key="m" :value="m">{{ m }}</option>
+            <input v-model="cfgForm.modelStr" class="input" placeholder="model-name" />
+            <span v-if="cfgForm.provider === 'eggfans'" class="field-hint">只显示 GPT、Gemini、Doubao 系列；模型列表来自 Eggfans pricing。</span>
+          </label>
           <label v-if="cfgForm.service_type === 'text'" class="field">
             <span class="field-label">Temperature <span class="dim">({{ t('settings.cfg.tempHint') }})</span></span>
             <input v-model="cfgForm.temperature" class="input" type="number" step="0.1" min="0" max="2" :placeholder="t('settings.cfg.tempPlaceholder')" />
@@ -658,7 +703,7 @@
 </template>
 
 <script setup>
-import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu, Sparkles, Palette, ExternalLink, Star, HardDrive, Database, RefreshCw, Download, Languages, SunMoon } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu, Sparkles, Palette, ExternalLink, Star, HardDrive, Database, RefreshCw, Download, Languages, SunMoon, ImageUp } from 'lucide-vue-next'
 import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'
 import { toastError } from '~/composables/useToast'
@@ -690,8 +735,15 @@ const cfgDialog = ref(false)
 const cfgEditId = ref(null)
 const cfgTesting = ref(false)
 const cfgTestResult = ref(null)
-const huobaoApiKey = ref('')
-const huobaoSaving = ref(false)
+const eggfansModelOptions = ref([])
+const imageHostConfigured = ref(false)
+const imageHostKey = ref('')
+const imageHostSaving = ref(false)
+const virtualAssetConfigured = ref(false)
+const virtualAssetKey = ref('')
+const virtualAssetSaving = ref(false)
+const virtualAssetBaseUrl = ref('https://api.mjing.cc')
+const cfgSelectedModels = ref([])
 const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', endpoint: '', query_endpoint: '', modelStr: '', service_type: 'text', priority: 0, temperature: '' })
 // 服务类型 label/desc 渲染时求值（语言切换即时生效），type 为逻辑值
 const serviceTypes = computed(() => [
@@ -699,7 +751,7 @@ const serviceTypes = computed(() => [
   { type: 'image', label: t('common.serviceType.image') },
   { type: 'video', label: t('common.serviceType.video') },
 ])
-const providers = ['eggfans', 'gemini', 'openai', 'volcengine', 'minimax', 'aliyun']
+const providers = ['eggfans', 'gemini', 'openai', 'volcengine', 'minimax', 'autodl', 'aliyun']
 const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
 const serviceMeta = computed(() => ({
   text: { label: t('common.serviceType.text'), desc: t('settings.ai.meta.text') },
@@ -712,23 +764,28 @@ const providerPresets = {
     openai: { label: 'OpenAI 官方', baseUrl: 'https://api.openai.com', models: ['deepseek-v4-pro', 'gpt-5.6-terra'] },
   },
   image: {
-    gemini: { label: 'Gemini 官方', baseUrl: 'https://generativelanguage.googleapis.com', models: ['gemini-3-pro-image', 'gemini-3.1-flash-image'] },
+    eggfans: { label: 'Eggfans 图片', baseUrl: 'https://api.eggfans.com', models: ['gpt-image-2.5-sunburst-c'], endpoint: '/v1/images/generations' },
+    gemini: { label: 'Gemini 官方', baseUrl: 'https://generativelanguage.googleapis.com', models: ['gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image'] },
     openai: { label: 'OpenAI 官方', baseUrl: 'https://api.openai.com', models: ['gpt-image-2'] },
   },
   video: {
+    eggfans: { label: 'EggFans · sd-2.5-C', baseUrl: 'https://vip.eggfans.asia', models: ['sd-2.5-C'], endpoint: '/v1/videos', queryEndpoint: '/v1/videos/{taskId}' },
     volcengine: { label: 'Seedance 2.0 官方', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'] },
     minimax: { label: 'MiniMax H3 官方', baseUrl: 'https://api.minimaxi.com', models: ['MiniMax-H3'] },
+    autodl: { label: 'AutoDL · MiniMax H3', baseUrl: 'https://autodl.art', models: ['minimax_h3_zm_u24'], endpoint: '/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24', queryEndpoint: '/api/v1/comfyui/comfyui_workflow/result/{taskId}' },
     aliyun: { label: '阿里云百炼 Wan 3.0', baseUrl: 'https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com', models: ['wan3.0-video-prime', 'wan3.0-video'] },
   },
 }
 const huobaoQuickConfigs = [
-  { service_type: 'text', provider: 'gemini', name: '火宝文本服务 · Gemini', base_url: 'https://api.firemux.com', model: ['gemini-3.1-pro-preview', 'gemini-3.5-flash', 'gemini-3-flash-preview'], priority: 100 },
-  { service_type: 'text', provider: 'openai', name: '火宝文本服务 · OpenAI', base_url: 'https://api.firemux.com', model: ['deepseek-v4-pro', 'deepseek-v4-flash', 'gpt-5.6-terra'], priority: 101 },
-  { service_type: 'image', provider: 'openai', name: '火宝图片服务 · OpenAI', base_url: 'https://api.firemux.com', model: ['gpt-image-2'], priority: 99 },
-  { service_type: 'image', provider: 'gemini', name: '火宝图片服务 · Gemini', base_url: 'https://api.firemux.com', model: ['gemini-3-pro-image', 'gemini-3.1-flash-image'], priority: 97 },
-  { service_type: 'video', provider: 'volcengine', name: '火宝视频服务 · Seedance', base_url: 'https://api.firemux.com/volcengine', model: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'], priority: 98 },
-  { service_type: 'video', provider: 'aliyun', name: '火宝视频服务 · Wan 3.0', base_url: 'https://api.firemux.com/qwen', model: ['wan3.0-video-prime', 'wan3.0-video'], priority: 97 },
-  { service_type: 'video', provider: 'minimax', name: '火宝视频服务 · MiniMax', base_url: 'https://api.firemux.com/minimax', model: ['MiniMax-H3'], priority: 96 },
+  { service_type: 'video', provider: 'eggfans', name: 'Eggfans video sd-2.5-C', base_url: 'https://vip.eggfans.asia', model: ['sd-2.5-C'], endpoint: '/v1/videos', query_endpoint: '/v1/videos/{taskId}', priority: 110 },
+  { service_type: 'video', provider: 'eggfans', name: 'Eggfans 视频服务 · sd-2.5-C', base_url: 'https://vip.eggfans.asia', model: ['sd-2.5-C'], endpoint: '/v1/videos', query_endpoint: '/v1/videos/{taskId}', priority: 110 },
+  { service_type: 'text', provider: 'gemini', name: 'Eggfans文本服务 · Gemini', base_url: 'https://api.eggfans.com', model: ['gemini-3.1-pro-preview', 'gemini-3.5-flash', 'gemini-3-flash-preview'], priority: 100 },
+  { service_type: 'text', provider: 'openai', name: 'Eggfans文本服务 · OpenAI', base_url: 'https://api.eggfans.com', model: ['deepseek-v4-pro', 'deepseek-v4-flash', 'gpt-5.6-terra'], priority: 101 },
+  { service_type: 'image', provider: 'openai', name: 'Eggfans图片服务 · OpenAI', base_url: 'https://api.eggfans.com', model: ['gpt-image-2.5-sunburst-c'], priority: 99 },
+  { service_type: 'image', provider: 'gemini', name: 'Eggfans图片服务 · Gemini', base_url: 'https://api.eggfans.com', model: ['gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image'], priority: 97 },
+  { service_type: 'video', provider: 'volcengine', name: 'Eggfans视频服务 · Seedance', base_url: 'https://api.eggfans.com/volcengine', model: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'], priority: 98 },
+  { service_type: 'video', provider: 'aliyun', name: 'Eggfans视频服务 · Wan 3.0', base_url: 'https://api.eggfans.com/qwen', model: ['wan3.0-video-prime', 'wan3.0-video'], priority: 97 },
+  { service_type: 'video', provider: 'minimax', name: 'Eggfans视频服务 · MiniMax', base_url: 'https://api.eggfans.com/minimax', model: ['MiniMax-H3'], priority: 96 },
 ]
 
 function byType(t) { return cfgs.value.filter(c => c.service_type === t) }
@@ -743,12 +800,69 @@ function applyProviderPreset(type, provider) {
   if (!preset) return
   cfgForm.provider = provider
   cfgForm.base_url = preset.baseUrl
+  cfgForm.endpoint = preset.endpoint || ''
+  cfgForm.query_endpoint = preset.queryEndpoint || ''
   cfgForm.modelStr = preset.models.join(', ')
+  cfgSelectedModels.value = [...preset.models]
   // 配置名持久化进 DB：用 provider 英文 + 服务类型英文标识拼，不随界面语言漂移
   cfgForm.name = `${preset.label}-${type}`
 }
 
-async function loadCfgs() { try { cfgs.value = await aiConfigAPI.list() } catch (e) { toastError(e) } }
+async function loadCfgs() {
+  try { cfgs.value = await aiConfigAPI.list() } catch (e) { toastError(e) }
+}
+async function loadEggfansModels() {
+  try { eggfansModelOptions.value = await aiConfigAPI.eggfansModels() } catch { eggfansModelOptions.value = [] }
+}
+async function loadImageHostKeyState() {
+  try { imageHostConfigured.value = !!(await settingsAPI.imageHost()).configured } catch { imageHostConfigured.value = false }
+}
+async function saveImageHostKey() {
+  if (!imageHostKey.value.trim()) { toast.warning(t('settings.ai.imageHostKeyRequired')); return }
+  imageHostSaving.value = true
+  try {
+    imageHostConfigured.value = !!(await settingsAPI.setImageHost(imageHostKey.value.trim())).configured
+    imageHostKey.value = ''
+    toast.success(t('settings.ai.imageHostSaved'))
+  } catch (e) { toastError(e) } finally { imageHostSaving.value = false }
+}
+async function clearImageHostKey() {
+  imageHostSaving.value = true
+  try { imageHostConfigured.value = !!(await settingsAPI.setImageHost('')).configured; imageHostKey.value = ''; toast.success(t('settings.ai.imageHostCleared')) }
+  catch (e) { toastError(e) } finally { imageHostSaving.value = false }
+}
+async function loadVirtualAssetKeyState() {
+  try {
+    const state = await settingsAPI.virtualAssets()
+    virtualAssetConfigured.value = !!state.configured
+    virtualAssetBaseUrl.value = state.base_url || 'https://api.mjing.cc'
+  } catch { virtualAssetConfigured.value = false }
+}
+async function saveVirtualAssetKey() {
+  if (!virtualAssetKey.value.trim()) { toast.warning(t('settings.ai.virtualAssetKeyRequired')); return }
+  virtualAssetSaving.value = true
+  try {
+    const state = await settingsAPI.setVirtualAssets(virtualAssetKey.value.trim())
+    virtualAssetConfigured.value = !!state.configured
+    virtualAssetBaseUrl.value = state.base_url || virtualAssetBaseUrl.value
+    virtualAssetKey.value = ''
+    toast.success(t('settings.ai.virtualAssetSaved'))
+  } catch (e) { toastError(e) } finally { virtualAssetSaving.value = false }
+}
+async function clearVirtualAssetKey() {
+  virtualAssetSaving.value = true
+  try {
+    virtualAssetConfigured.value = !!(await settingsAPI.setVirtualAssets('')).configured
+    virtualAssetKey.value = ''
+    toast.success(t('settings.ai.virtualAssetCleared'))
+  } catch (e) { toastError(e) } finally { virtualAssetSaving.value = false }
+}
+function applyCfgModelPicker() {
+  cfgForm.modelStr = cfgSelectedModels.value.join(', ')
+}
+function parseCfgModels(value) {
+  return String(value || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
+}
 
 // ===== 默认模型选择 =====
 // 默认解析规则与工作台/后端一致：启用配置中优先级最高者的模型列表首位
@@ -784,29 +898,10 @@ async function setDefaultModel(type, c, m) {
 }
 async function toggleCfg(c) { await aiConfigAPI.update(c.id, { is_active: !c.is_active }); loadCfgs() }
 async function delCfg(id) { await aiConfigAPI.del(id); toast.success(t('index.deleted')); loadCfgs() }
-async function applyHuobaoQuickConfig() {
-  const apiKey = huobaoApiKey.value.trim()
-  if (!apiKey) { toast.warning(t('settings.ai.apiKeyRequired')); return }
-  huobaoSaving.value = true
-  try {
-    for (const preset of huobaoQuickConfigs) {
-      const payload = { ...preset, api_key: apiKey }
-      const existing = cfgs.value.find(c => c.name === preset.name || (c.service_type === preset.service_type && c.provider === preset.provider && c.base_url === preset.base_url))
-      if (existing) await aiConfigAPI.update(existing.id, payload)
-      else await aiConfigAPI.create(payload)
-    }
-    toast.success(t('settings.ai.quickApplied'))
-    huobaoApiKey.value = ''
-    await loadCfgs()
-  } catch (e) {
-    toastError(e)
-  } finally {
-    huobaoSaving.value = false
-  }
-}
 function startAddCfg(t) {
   cfgEditId.value = null
   cfgTestResult.value = null
+  cfgSelectedModels.value = []
   Object.assign(cfgForm, { name: '', provider: '', api_key: '', base_url: '', endpoint: '', query_endpoint: '', modelStr: '', service_type: t, priority: 0, temperature: '' })
   const firstPreset = presetsByType(t)[0]
   if (firstPreset) applyProviderPreset(t, firstPreset.provider)
@@ -815,6 +910,7 @@ function startAddCfg(t) {
 function startEditCfg(c) {
   cfgEditId.value = c.id
   cfgTestResult.value = null
+  cfgSelectedModels.value = parseCfgModels(c.model)
   Object.assign(cfgForm, {
     name: c.name || '',
     provider: c.provider,
@@ -849,7 +945,7 @@ async function testDraftCfg() {
     base_url: cfgForm.base_url,
     endpoint: cfgForm.endpoint,
     query_endpoint: cfgForm.query_endpoint,
-    model: cfgForm.modelStr.split(',').map(s => s.trim()).filter(Boolean),
+    model: cfgForm.modelStr.split(/[，,]/).map(s => s.trim()).filter(Boolean),
   })
 }
 async function testExistingCfg(c) {
@@ -866,7 +962,7 @@ async function testExistingCfg(c) {
 }
 async function saveCfg() {
   if (!cfgForm.provider) { toast.warning(t('settings.cfg.providerRequired')); return }
-  const models = cfgForm.modelStr.split(',').map(s => s.trim()).filter(Boolean)
+  const models = cfgForm.modelStr.split(/[，,]/).map(s => s.trim()).filter(Boolean)
   const temperature = cfgForm.temperature === '' || cfgForm.temperature === null ? null : Number(cfgForm.temperature)
   if (temperature !== null && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2)) {
     toast.warning(t('settings.cfg.tempInvalid')); return
@@ -992,7 +1088,6 @@ async function loadContentLanguage() {
   try {
     const lang = (await settingsAPI.contentLanguage())?.language || 'zh'
     contentLanguage.value = lang
-    editLang.value = lang  // Agent 编辑器默认跟随内容语言
   } catch { /* 保持默认 */ }
 }
 async function setContentLanguage(lang) {
@@ -1177,7 +1272,7 @@ async function saveStyle() {
   } catch (e) { toastError(e) }
 }
 
-onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills(); loadAgentPrompt(selectedAgent.value); loadStylePresets() })
+onMounted(() => { loadCfgs(); loadEggfansModels(); loadImageHostKeyState(); loadVirtualAssetKeyState(); loadAgents(); loadAllSkills(); loadAgentPrompt(selectedAgent.value); loadStylePresets() })
 
 // ===== 应用内引导（设置页）：快捷配置 + 手动模板两步 =====
 const SETTINGS_TOUR = [
@@ -1381,7 +1476,7 @@ onBeforeUnmount(stopUsagePoll)
 .settings-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
 .settings-desc { font-size: 13px; color: var(--text-2); margin-top: 6px; }
 
-/* 火宝快捷配置 */
+/* Eggfans快捷配置 */
 .quick-card {
   padding: 20px;
   margin-bottom: 16px;
@@ -1391,19 +1486,19 @@ onBeforeUnmount(stopUsagePoll)
 .quick-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .setup-title { font-size: 15px; font-weight: 700; color: var(--text-0); }
 .setup-desc { font-size: 12.5px; color: var(--text-2); margin-bottom: 14px; }
-.huobao-site-link {
+.Eggfans-site-link {
   display: inline-flex; align-items: center; gap: 3px;
   margin-left: 6px;
   color: var(--accent); text-decoration: none;
   font-weight: 600; white-space: nowrap;
 }
-.huobao-site-link:hover { text-decoration: underline; }
-.huobao-quick-row {
+.Eggfans-site-link:hover { text-decoration: underline; }
+.Eggfans-quick-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
 }
-.huobao-quick-models {
+.Eggfans-quick-models {
   margin-top: 14px;
   display: flex;
   flex-direction: column;
@@ -1515,6 +1610,13 @@ onBeforeUnmount(stopUsagePoll)
 .svc-group-sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
 .config-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; }
 .config-row + .config-row { border-top: 1px solid var(--border); }
+.image-host-row { align-items: flex-start; }
+.image-host-form { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.image-host-form .input { width: min(360px, 35vw); }
+@media (max-width: 760px) {
+  .image-host-form { width: 100%; margin-left: 0; justify-content: flex-start; }
+  .image-host-form .input { width: 100%; }
+}
 .provider-badge {
   width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -1667,6 +1769,11 @@ onBeforeUnmount(stopUsagePoll)
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field-label { font-size: 12px; font-weight: 550; color: var(--text-1); }
 .field-hint { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.eggfans-model-picker { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-input); padding: 8px; margin-bottom: 8px; }
+.eggfans-model-picker-head { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; color: var(--text-2); }
+.eggfans-model-picker-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; max-height: 180px; overflow-y: auto; padding-right: 4px; }
+.eggfans-model-option { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; color: var(--text-1); cursor: pointer; }
+.eggfans-model-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .required { color: var(--error); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 

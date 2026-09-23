@@ -36,6 +36,10 @@ data/public.sql
 data/*.bak*
 data/static/
 data/storage/
+# Local database snapshots and runtime media are never source backups.
+data/**/*.db
+data/**/*.db-*
+data/backup*/
 
 # Config
 configs/config.yaml

@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "火宝短剧",
+    "title": "Eggfans短剧",
     "updateAvailable": "发现新版本 v{version}，可在「设置 → 关于更新」中升级"
   },
   "common": {
@@ -268,11 +268,11 @@
     "ai": {
       "title": "AI 服务配置",
       "desc": "先用推荐模板快速落配置，再按服务类型微调。工作台创建集时会锁定所选图片和视频能力。",
-      "quickTitle": "火宝快捷配置",
+      "quickTitle": "Eggfans快捷配置",
       "recommended": "推荐",
-      "quickDesc": "输入 Huobao API Key，一次写入文本、图片、视频三条推荐配置。",
-      "getKey": "前往 api.firemux.com 获取 Key",
-      "applyQuick": "写入火宝配置",
+      "quickDesc": "输入 Eggfans API Key，一次写入文本、图片、视频三条推荐配置。",
+      "getKey": "前往 api.eggfans.com 获取 Key",
+      "applyQuick": "写入Eggfans配置",
       "manualTitle": "手动模板",
       "manualDesc": "选择服务类型后，直接用模板填充推荐的 `provider / base URL / model`。",
       "activeCount": "{n} 已启用",
@@ -282,14 +282,34 @@
       "setDefault": "设为该类型默认模型",
       "noBaseUrl": "未设置 Base URL",
       "test": "测试",
-      "apiKeyRequired": "请填写 Huobao API Key",
-      "quickApplied": "火宝快捷配置已写入",
+      "apiKeyRequired": "请填写 Eggfans API Key",
+      "quickApplied": "Eggfans快捷配置已写入",
       "defaultModelSwitched": "默认{type}模型已切换为 {model}",
       "meta": {
         "text": "剧本改写、角色场景提取、分镜拆解等 Agent 文本能力",
         "image": "角色图、场景图与镜头图等静态图像生成",
         "video": "镜头视频直出生成，默认 Seedance 2.0"
-      }
+      },
+      "imageHostTitle": "Eggfans 图床备用",
+      "imageHostDesc": "资产上传优先使用 Uguu，失败后自动使用 Eggfans 图床；Key 仅保存在本地后端。",
+      "imageHostConfigured": "已配置",
+      "imageHostNotConfigured": "未配置",
+      "imageHostDocs": "查看 Eggfans 图床说明",
+      "imageHostKeyPlaceholder": "输入 Eggfans 图床 Key",
+      "imageHostKeyRequired": "请先输入 Eggfans 图床 Key",
+      "imageHostSaved": "Eggfans 图床 Key 已保存",
+      "imageHostCleared": "Eggfans 图床 Key 已清除",
+      "virtualAssetTitle": "sd 虚拟资产库",
+      "virtualAssetDesc": "角色资产按项目创建虚拟资产 URI，sd 系列视频生成时自动以 URI 传入；Key 仅保存在本地后端。",
+      "virtualAssetConfigured": "已配置",
+      "virtualAssetNotConfigured": "未配置",
+      "virtualAssetService": "谜镜虚拟资产服务",
+      "virtualAssetDocs": "查看虚拟资产接口说明",
+      "virtualAssetKeyPlaceholder": "输入虚拟资产 API Key",
+      "virtualAssetKeyRequired": "请先输入虚拟资产 API Key",
+      "virtualAssetSaved": "虚拟资产 API Key 已保存",
+      "virtualAssetCleared": "虚拟资产 API Key 已清除",
+      "virtualAssetClear": "清除"
     },
     "styles": {
       "title": "风格预设",
@@ -387,7 +407,7 @@
       "addTitle": "添加{type}服务",
       "sub": "推荐先选择模板，系统会自动填入更合理的 `Base URL` 与默认模型。",
       "name": "配置名称",
-      "namePlaceholder": "如 火宝默认图像服务",
+      "namePlaceholder": "如 Eggfans默认图像服务",
       "provider": "服务商",
       "providerPlaceholder": "选择服务商",
       "priority": "优先级",
@@ -450,7 +470,8 @@
       "viewFilm": "查看成片",
       "continue": "继续制作",
       "start": "开始制作",
-      "resolution": "分辨率"
+      "resolution": "分辨率",
+      "aspectRatio": "比例"
     },
     "model": {
       "defaultWith": "默认 · {model}",
@@ -543,6 +564,22 @@
       "uploadSceneImage": "上传场景图",
       "uploadPropImage": "上传道具图",
       "uploadImage": "上传图片",
+      "publicUrl": "图床 URL",
+      "publicUrlReady": "上传成功",
+      "publicUrlMissing": "尚未上传",
+      "publicUrlRetryHint": "图床上传未成功，可手动重试",
+      "publicUrlImageFirst": "请先上传或生成资产图片",
+      "uploadPublic": "上传图床",
+      "uploadingPublic": "上传中",
+      "publicUploadDone": "图床 URL 已更新",
+      "publicUploadFailed": "图床上传失败",
+      "virtualAssetUri": "虚拟资产 URI",
+      "virtualAssetMissing": "尚未创建",
+      "virtualAssetReady": "已就绪",
+      "virtualAssetCreate": "创建 / 刷新 URI",
+      "virtualAssetCreating": "创建中",
+      "virtualAssetDone": "角色虚拟资产 URI 已就绪",
+      "virtualAssetFailed": "角色虚拟资产创建失败",
       "appearance": "样貌：",
       "styling": "妆造：",
       "lighting": "光照 · ",
@@ -740,6 +777,7 @@
       "allDone": "所有镜头视频已生成",
       "moderationHint": "疑似真人/敏感内容审核未通过，可在顶栏切换其他视频模型后重试",
       "resolutionSwitched": "本集视频分辨率已切换为 {label}",
+      "aspectRatioSwitched": "全局视频比例已切换为 {ratio}",
       "noneToGenerate": "没有可生成的镜头",
       "batchStarted": "已发起 {n} 个视频生成任务",
       "retryFailed": "重试失败({n})",
@@ -758,7 +796,13 @@
       "confirmNote": "将按以上配置逐镜头发起生成；失败的任务之后可点「重试失败」一键重跑。",
       "confirmStart": "开始生成 ({n})",
       "selectMissing": "选未生成",
-      "aspectRatio": "画面比例"
+      "aspectRatio": "画面比例",
+      "referenceMode": "资产传输",
+      "referenceModeUri": "URI 资产",
+      "referenceModeUrl": "URL 直传",
+      "referenceModeUriHint": "角色图先通过 Uguu 公网 URL 创建虚拟资产，再将 asset URI 传给 sd 视频模型",
+      "referenceModeUrlHint": "跳过虚拟资产接口，直接将 Uguu 或备用图床 URL 传给 sd 视频模型",
+      "referenceModeSwitched": "资产传输已切换为 {mode}"
     },
     "inspector": {
       "videoPromptPlaceholder": "用 {'@'}角色名 / {'@'}场景名 引用参考素材，生成时自动映射为参考图片；再按时间段描述画面运动与镜头…",
@@ -816,6 +860,23 @@
       "unmarkDoneToast": "已取消完成标记"
     },
     "image": {
+      "params": "生成参数",
+      "paramsTitle": "资产图片生成参数",
+      "paramsSubtitle": "用于角色、场景和道具的单张及批量生成",
+      "model": "当前模型",
+      "size": "图片尺寸",
+      "count": "每个资产生成张数",
+      "quality": "生成质量",
+      "moderation": "审核级别",
+      "format": "图片格式",
+      "responseFormat": "返回格式",
+      "promptSuffix": "统一提示词补充",
+      "promptSuffixPlaceholder": "可选，将追加到每个资产自己的提示词后",
+      "paramsNote": "提示词主体仍按每个资产分别生成；n 可设为 1-10，当前资产主图使用返回结果中的第 1 张。设置保存在本机。",
+      "resetParams": "恢复默认",
+      "paramsSaved": "资产图片参数已保存",
+      "generationFailed": "资产图片生成失败",
+      "waitTimeout": "图片生成等待超时，请在任务列表查看状态",
       "generatingChar": "角色图片生成中",
       "generatingScene": "场景图片生成中",
       "generatingProp": "道具图片生成中",
@@ -832,6 +893,8 @@
     },
     "upload": {
       "assetDone": "{type}已上传",
+      "assetDoneWithPublicUrl": "{type}已上传，图床 URL 获取成功",
+      "assetDonePublicFailed": "图片已保存，但图床上传失败：{error}。可在资产卡片中手动重试",
       "refImageFull": "参考图片已达上限（含场景/角色素材）",
       "refImageDone": "参考图片已上传",
       "refMax3": "参考{type}最多 3 个",
@@ -875,7 +938,7 @@
     "helpTitle": "使用引导",
     "index": {
       "welcome": {
-        "title": "👋 欢迎使用火宝短剧",
+        "title": "👋 欢迎使用Eggfans短剧",
         "desc": "小说 → 剧本 → 资产 → 分镜 → 视频 → 成片，一站式 AI 短剧制作。先配置 AI 服务，再创建第一个项目。"
       },
       "create": {
@@ -884,13 +947,13 @@
       },
       "settings": {
         "title": "第 1 步 · 配置 AI 服务",
-        "desc": "所有 AI 功能都要先配置。点这里进「设置」页，粘贴 Huobao API Key 一键完成文本/图片/视频三条配置。"
+        "desc": "所有 AI 功能都要先配置。点这里进「设置」页，粘贴 Eggfans API Key 一键完成文本/图片/视频三条配置。"
       }
     },
     "settings": {
       "quick": {
         "title": "最快上手：快捷配置",
-        "desc": "粘贴 Huobao API Key，一键写入文本、图片、视频三条推荐配置，支持连通性测试。"
+        "desc": "粘贴 Eggfans API Key，一键写入文本、图片、视频三条推荐配置，支持连通性测试。"
       },
       "nav": {
         "title": "全部配置都在这",

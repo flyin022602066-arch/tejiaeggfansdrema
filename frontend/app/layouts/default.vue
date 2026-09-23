@@ -5,12 +5,12 @@
       <div class="header-left">
         <button class="brand" @click="navigateTo('/')">
           <div class="brand-mark">
-            <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="brand-logo" @error="showBrandImage = false" />
+            <img v-if="showBrandImage" :src="brandLogo" alt="Eggfans" class="brand-logo" @error="showBrandImage = false" />
             <span v-else class="brand-fallback">火</span>
           </div>
           <div class="brand-text">
-            <span class="brand-name">火宝短剧</span>
-            <span class="brand-sub">Huobao Shorts</span>
+            <span class="brand-name">Eggfans</span>
+            <span class="brand-sub">Eggfans Shorts</span>
           </div>
         </button>
       </div>
@@ -59,7 +59,7 @@
 import { LayoutGrid, Settings, TriangleAlert, Github } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { aiConfigAPI } from '~/composables/useApi'
-import brandLogo from '~/assets/huobao-logo.png'
+import brandLogo from '~/assets/eggfans-logo.jpg'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -93,7 +93,9 @@ watch(locale, checkAiConfigs)
 <style scoped>
 .shell {
   display: flex; flex-direction: column;
-  height: 100vh; overflow: hidden;
+  position: fixed; inset: 0;
+  width: 100%; height: 100%; min-height: 0;
+  overflow: hidden;
   background: var(--bg-base);
 }
 
@@ -229,5 +231,5 @@ watch(locale, checkAiConfigs)
 .config-banner-link:hover { background: var(--warn-link-hover-bg); color: var(--warn-text); }
 
 /* Content */
-.content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.content { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 </style>

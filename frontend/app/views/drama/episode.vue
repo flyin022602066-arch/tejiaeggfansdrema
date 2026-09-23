@@ -45,6 +45,33 @@
             :default-label="t('episode.model.defaultWith', { model: videoModelOptions[0].model })"
             :show-config="videoModelMultiCfg"
           />
+          <div class="video-reference-mode" :aria-label="t('episode.vid.referenceMode')">
+            <span class="video-reference-mode-label">{{ t('episode.vid.referenceMode') }}</span>
+            <div class="seg video-reference-mode-seg" role="group">
+              <button
+                type="button"
+                class="seg-item"
+                :class="{ on: videoAssetReferenceMode === 'uri' }"
+                :disabled="!videoAssetReferenceModeReady || videoAssetReferenceModeSaving"
+                :title="t('episode.vid.referenceModeUriHint')"
+                @click="changeVideoAssetReferenceMode('uri')"
+              >{{ t('episode.vid.referenceModeUri') }}</button>
+              <button
+                type="button"
+                class="seg-item"
+                :class="{ on: videoAssetReferenceMode === 'url' }"
+                :disabled="!videoAssetReferenceModeReady || videoAssetReferenceModeSaving"
+                :title="t('episode.vid.referenceModeUrlHint')"
+                @click="changeVideoAssetReferenceMode('url')"
+              >{{ t('episode.vid.referenceModeUrl') }}</button>
+            </div>
+          </div>
+          <ModelSelect
+            v-model="dramaAspectRatio"
+            :label="t('episode.topbar.aspectRatio')"
+            :options="aspectRatioOptions"
+            hide-default
+          />
           <ModelSelect
             v-model="episodeResolution"
             :label="t('episode.topbar.resolution')"
@@ -269,6 +296,10 @@
                   {{ (et.key === 'characters' ? chars.length : et.key === 'scenes' ? scenes.length : propItems.length) ? t('episode.prod.reextract', { type: et.label }) : t('episode.prod.extract', { type: et.label }) }}
                 </button>
                 <span class="asset-bar-divider" />
+              <button class="btn btn-sm asset-btn-params" type="button" :title="t('episode.image.paramsTitle')" @click="imageParamsOpen = true">
+                  <SlidersHorizontal :size="11" />
+                  {{ t('episode.image.params') }}
+                </button>
                 <button class="btn btn-sm asset-btn-batch" @click="batchCharImages">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                   {{ t('episode.prod.batchChar') }}
@@ -321,11 +352,11 @@
                   <div class="character-asset-overview"><div class="character-portrait">
                       <img
                         v-if="c.image_url || c.imageUrl"
-                        :src="thumbOf(assetImageSrc(c))"
+                        :src="assetThumbSrc(c)"
                         class="previewable-image"
                         loading="lazy"
-                        @error="thumbFallback($event, assetImageSrc(c))"
-                        @click.stop="openImageViewer(assetImageSrc(c), t('episode.asset.charImageTitle', { name: c.name }))"
+                        @error="thumbFallback($event, assetDisplaySrc(c))"
+                        @click.stop="openImageViewer(assetDisplaySrc(c), t('episode.asset.charImageTitle', { name: c.name }))"
                       />
                       <div v-else class="character-portrait-empty">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -361,6 +392,24 @@
                     <span class="afp-label">{{ t('episode.asset.finalPromptTurnaround') }}</span>
                     <span :class="['afp-text', !(c.final_prompt || c.finalPrompt) && 'dim']">{{ c.final_prompt || c.finalPrompt || t('episode.asset.finalPromptAutoTurnaround') }}</span>
                   </div>
+                  <div class="asset-public-row" @click.stop>
+                    <span class="asset-public-label">{{ t('episode.asset.publicUrl') }}</span>
+                    <a v-if="assetPublicUrl(c)" :href="assetPublicUrl(c)" target="_blank" rel="noopener" class="asset-public-link" :title="assetPublicUrl(c)">{{ assetPublicUrl(c) }}</a>
+                    <span v-else class="asset-public-missing">{{ t('episode.asset.publicUrlMissing') }}</span>
+                    <button v-if="assetImageSrc(c) && !assetPublicUrl(c)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('character', c.id)" @click.stop="retryAssetPublicUpload('character', c.id)">
+                      <Loader2 v-if="isUploadingPublicAsset('character', c.id)" :size="10" class="animate-spin" />
+                      {{ isUploadingPublicAsset('character', c.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
+                    </button>
+                  </div>
+                  <div class="asset-public-row" @click.stop>
+                    <span class="asset-public-label">{{ t('episode.asset.virtualAssetUri') }}</span>
+                    <span v-if="assetVirtualUri(c)" class="asset-public-link mono" :title="assetVirtualUri(c)">{{ assetVirtualUri(c) }}</span>
+                    <span v-else class="asset-public-missing">{{ t('episode.asset.virtualAssetMissing') }}</span>
+                    <button v-if="assetImageSrc(c)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isCreatingVirtualAsset(c.id)" @click.stop="createCharacterVirtualAsset(c.id)">
+                      <Loader2 v-if="isCreatingVirtualAsset(c.id)" :size="10" class="animate-spin" />
+                      {{ isCreatingVirtualAsset(c.id) ? t('episode.asset.virtualAssetCreating') : t('episode.asset.virtualAssetCreate') }}
+                    </button>
+                  </div>
                 </div>
               </article>
             </div>
@@ -368,7 +417,16 @@
 
             <div class="asset-section-title">
               {{ t('common.scene') }}
-              <button class="asset-add-btn" @click="openAssetCreate('scene')"><Plus :size="11" /> {{ t('common.add') }}</button>
+              <div class="asset-section-actions">
+                <label class="asset-model-inline">
+                  <span>场景模型</span>
+                  <select v-model="sceneModel" class="select asset-model-inline-select" title="仅用于场景图片生成">
+                    <option value="">跟随图片默认</option>
+                    <option v-for="option in sceneImageModelOptions" :key="`scene-inline-${option.key}`" :value="option.key">{{ option.model }} · {{ option.configName }}</option>
+                  </select>
+                </label>
+                <button class="asset-add-btn" @click="openAssetCreate('scene')"><Plus :size="11" /> {{ t('common.add') }}</button>
+              </div>
             </div>
             <template v-if="scenes.length">
             <div class="asset-grid">
@@ -386,11 +444,11 @@
                 <div class="asset-cover wide">
                   <img
                     v-if="s.image_url || s.imageUrl"
-                    :src="thumbOf(assetImageSrc(s))"
+                    :src="assetThumbSrc(s)"
                     class="previewable-image"
                     loading="lazy"
-                    @error="thumbFallback($event, assetImageSrc(s))"
-                    @click.stop="openImageViewer(assetImageSrc(s), t('episode.asset.sceneImageTitle', { name: s.location }))"
+                    @error="thumbFallback($event, assetDisplaySrc(s))"
+                    @click.stop="openImageViewer(assetDisplaySrc(s), t('episode.asset.sceneImageTitle', { name: s.location }))"
                   />
                   <div v-else class="asset-cover-empty">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -404,6 +462,15 @@
                   <div class="asset-meta asset-final" :class="{ dim: !(s.final_prompt || s.finalPrompt) }" :title="s.final_prompt || s.finalPrompt || ''">
                     <span class="afp-label">{{ t('episode.asset.finalPromptFixed') }}</span>
                     {{ s.final_prompt || s.finalPrompt || t('episode.asset.finalPromptAutoFixed') }}
+                  </div>
+                  <div class="asset-public-row" @click.stop>
+                    <span class="asset-public-label">{{ t('episode.asset.publicUrl') }}</span>
+                    <a v-if="assetPublicUrl(s)" :href="assetPublicUrl(s)" target="_blank" rel="noopener" class="asset-public-link" :title="assetPublicUrl(s)">{{ assetPublicUrl(s) }}</a>
+                    <span v-else class="asset-public-missing">{{ t('episode.asset.publicUrlMissing') }}</span>
+                    <button v-if="assetImageSrc(s) && !assetPublicUrl(s)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('scene', s.id)" @click.stop="retryAssetPublicUpload('scene', s.id)">
+                      <Loader2 v-if="isUploadingPublicAsset('scene', s.id)" :size="10" class="animate-spin" />
+                      {{ isUploadingPublicAsset('scene', s.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
+                    </button>
                   </div>
                 </div>
                 <div class="asset-foot">
@@ -441,11 +508,11 @@
                 <div class="asset-cover wide">
                   <img
                     v-if="p.image_url || p.imageUrl"
-                    :src="thumbOf(assetImageSrc(p))"
+                    :src="assetThumbSrc(p)"
                     class="previewable-image"
                     loading="lazy"
-                    @error="thumbFallback($event, assetImageSrc(p))"
-                    @click.stop="openImageViewer(assetImageSrc(p), t('episode.asset.propImageTitle', { name: p.name }))"
+                    @error="thumbFallback($event, assetDisplaySrc(p))"
+                    @click.stop="openImageViewer(assetDisplaySrc(p), t('episode.asset.propImageTitle', { name: p.name }))"
                   />
                   <div v-else class="asset-cover-empty">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
@@ -461,6 +528,15 @@
                   <div class="asset-meta asset-final" :class="{ dim: !(p.final_prompt || p.finalPrompt) }" :title="p.final_prompt || p.finalPrompt || ''">
                     <span class="afp-label">{{ t('episode.asset.finalPromptWhiteBg') }}</span>
                     {{ p.final_prompt || p.finalPrompt || t('episode.asset.finalPromptAutoWhiteBg') }}
+                  </div>
+                  <div class="asset-public-row" @click.stop>
+                    <span class="asset-public-label">{{ t('episode.asset.publicUrl') }}</span>
+                    <a v-if="assetPublicUrl(p)" :href="assetPublicUrl(p)" target="_blank" rel="noopener" class="asset-public-link" :title="assetPublicUrl(p)">{{ assetPublicUrl(p) }}</a>
+                    <span v-else class="asset-public-missing">{{ t('episode.asset.publicUrlMissing') }}</span>
+                    <button v-if="assetImageSrc(p) && !assetPublicUrl(p)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('prop', p.id)" @click.stop="retryAssetPublicUpload('prop', p.id)">
+                      <Loader2 v-if="isUploadingPublicAsset('prop', p.id)" :size="10" class="animate-spin" />
+                      {{ isUploadingPublicAsset('prop', p.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
+                    </button>
                   </div>
                 </div>
                 <div class="asset-foot">
@@ -801,12 +877,12 @@
                         <input
                           :value="selectedSb.duration || 10"
                           type="number"
-                          :min="isWan3Video ? 2 : 4"
-                          :max="isWan3Video ? 30 : 15"
+                          :min="videoDurationMin"
+                          :max="videoDurationMax"
                           class="input video-duration-input"
                           @change="onVideoDurationChange"
                         />
-                        <span class="video-param-unit">{{ isWan3Video ? t('episode.inspector.durationUnitWan') : t('episode.inspector.durationUnit') }}</span>
+                        <span class="video-param-unit">s（{{ videoDurationMin }}-{{ videoDurationMax }}）</span>
                       </span>
                     </div>
                     <div class="video-param-hint">{{ t('episode.inspector.durationHint') }}</div>
@@ -1108,13 +1184,13 @@
                   type="button"
                   class="asset-detail-media-frame"
                   :disabled="!assetImageSrc(assetDetail.item)"
-                  @click.stop="openImageViewer(assetImageSrc(assetDetail.item), assetDetailImageTitle(assetDetail))"
+                  @click.stop="openImageViewer(assetDisplaySrc(assetDetail.item), assetDetailImageTitle(assetDetail))"
                 >
                   <img
                     v-if="assetImageSrc(assetDetail.item)"
-                    :src="thumbOf(assetImageSrc(assetDetail.item))"
+                    :src="assetThumbSrc(assetDetail.item)"
                     class="previewable-image"
-                    @error="thumbFallback($event, assetImageSrc(assetDetail.item))"
+                    @error="thumbFallback($event, assetDisplaySrc(assetDetail.item))"
                   />
                   <span v-else class="asset-detail-media-empty">
                     <svg v-if="assetDetail.type === 'character'" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1131,6 +1207,54 @@
                   <div class="asset-detail-meta-item">
                     <span>{{ assetDetail.type === 'character' ? t('episode.asset.roleLabel') : assetDetail.type === 'prop' ? t('episode.asset.propTypeLabel') : t('episode.asset.timeLabel') }}</span>
                     <strong>{{ assetDetail.type === 'character' ? (assetDetail.item.role || t('common.role')) : assetDetail.type === 'prop' ? (assetDetail.item.type || t('common.prop')) : (assetDetail.item.time || t('episode.asset.noTime')) }}</strong>
+                  </div>
+                </div>
+                <div class="asset-detail-public">
+                  <div class="asset-detail-public-head">
+                    <span>{{ t('episode.asset.publicUrl') }}</span>
+                    <span :class="['asset-detail-state', assetPublicUrl(assetDetail.item) ? 'is-ready' : '']">
+                      {{ assetPublicUrl(assetDetail.item) ? t('episode.asset.publicUrlReady') : t('episode.asset.publicUrlMissing') }}
+                    </span>
+                  </div>
+                  <a
+                    v-if="assetPublicUrl(assetDetail.item)"
+                    :href="assetPublicUrl(assetDetail.item)"
+                    target="_blank"
+                    rel="noopener"
+                    class="asset-detail-public-link"
+                    :title="assetPublicUrl(assetDetail.item)"
+                  >{{ assetPublicUrl(assetDetail.item) }}</a>
+                  <div v-else class="asset-detail-public-empty">
+                    <span>{{ assetImageSrc(assetDetail.item) ? t('episode.asset.publicUrlRetryHint') : t('episode.asset.publicUrlImageFirst') }}</span>
+                    <button
+                      v-if="assetImageSrc(assetDetail.item)"
+                      class="btn btn-sm"
+                      :disabled="isUploadingPublicAsset(assetDetail.type, assetDetail.item.id)"
+                      @click="retryAssetPublicUpload(assetDetail.type, assetDetail.item.id)"
+                    >
+                      <Loader2 v-if="isUploadingPublicAsset(assetDetail.type, assetDetail.item.id)" :size="11" class="animate-spin" />
+                      {{ isUploadingPublicAsset(assetDetail.type, assetDetail.item.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
+                    </button>
+                  </div>
+                </div>
+                <div v-if="assetDetail.type === 'character'" class="asset-detail-public">
+                  <div class="asset-detail-public-head">
+                    <span>{{ t('episode.asset.virtualAssetUri') }}</span>
+                    <span :class="['asset-detail-state', assetVirtualUri(assetDetail.item) ? 'is-ready' : '']">
+                      {{ assetVirtualUri(assetDetail.item) ? t('episode.asset.virtualAssetReady') : t('episode.asset.virtualAssetMissing') }}
+                    </span>
+                  </div>
+                  <div v-if="assetVirtualUri(assetDetail.item)" class="asset-detail-public-link mono" :title="assetVirtualUri(assetDetail.item)">{{ assetVirtualUri(assetDetail.item) }}</div>
+                  <div class="asset-detail-public-empty">
+                    <button
+                      v-if="assetImageSrc(assetDetail.item)"
+                      class="btn btn-sm"
+                      :disabled="isCreatingVirtualAsset(assetDetail.item.id)"
+                      @click="createCharacterVirtualAsset(assetDetail.item.id)"
+                    >
+                      <Loader2 v-if="isCreatingVirtualAsset(assetDetail.item.id)" :size="11" class="animate-spin" />
+                      {{ isCreatingVirtualAsset(assetDetail.item.id) ? t('episode.asset.virtualAssetCreating') : t('episode.asset.virtualAssetCreate') }}
+                    </button>
                   </div>
                 </div>
               </aside>
@@ -1392,6 +1516,86 @@
         </div>
       </div>
 
+      <div v-if="imageParamsOpen" class="overlay" @click.self="imageParamsOpen = false">
+        <div class="dialog image-params-dialog">
+          <header class="dialog-head">
+            <div>
+              <h2 class="dialog-title">{{ t('episode.image.paramsTitle') }}</h2>
+              <p class="image-params-subtitle">{{ t('episode.image.paramsSubtitle') }}</p>
+            </div>
+            <button class="btn btn-ghost btn-icon" type="button" :title="t('common.close')" @click="imageParamsOpen = false">
+              <X :size="14" />
+            </button>
+          </header>
+          <div class="dialog-body image-params-body">
+            <div class="image-params-model">
+              <span>角色/道具模型</span>
+              <strong class="mono">{{ effectiveImageModelLabel || t('episode.vid.defaultModel') }}</strong>
+            </div>
+            <div class="image-params-grid">
+              <label class="field">
+                <span class="field-label">{{ t('episode.image.size') }}</span>
+                <input v-model.trim="batchImageParams.size" class="input mono" list="asset-image-size-options" placeholder="1024x1024" />
+                <datalist id="asset-image-size-options">
+                  <option value="1024x1024" />
+                  <option value="1536x1024" />
+                  <option value="1024x1536" />
+                  <option value="3840x2160" />
+                  <option value="2160x3840" />
+                  <option value="1920x1080" />
+                  <option value="1080x1920" />
+                  <option value="auto" />
+                </datalist>
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('episode.image.count') }}</span>
+                <input v-model.number="batchImageParams.n" class="input mono" type="number" min="1" max="10" step="1" />
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('episode.image.quality') }}</span>
+                <select v-model="batchImageParams.quality" class="select">
+                  <option value="auto">auto</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('episode.image.moderation') }}</span>
+                <select v-model="batchImageParams.moderation" class="select">
+                  <option value="low">low</option>
+                  <option value="auto">auto</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('episode.image.format') }}</span>
+                <select v-model="batchImageParams.format" class="select">
+                  <option value="png">png</option>
+                  <option value="jpeg">jpeg</option>
+                  <option value="webp">webp</option>
+                </select>
+              </label>
+              <label class="field image-params-wide">
+                <span class="field-label">{{ t('episode.image.responseFormat') }}</span>
+                <select v-model="batchImageParams.response_format" class="select">
+                  <option value="url">url</option>
+                  <option value="b64_json">b64_json</option>
+                </select>
+              </label>
+              <label class="field image-params-wide">
+                <span class="field-label">{{ t('episode.image.promptSuffix') }}</span>
+                <textarea v-model.trim="batchImageParams.prompt_suffix" class="textarea" rows="3" :placeholder="t('episode.image.promptSuffixPlaceholder')" />
+              </label>
+            </div>
+            <p class="image-params-note">{{ t('episode.image.paramsNote') }}</p>
+          </div>
+          <footer class="dialog-foot">
+            <button class="btn" type="button" @click="resetBatchImageParams">{{ t('episode.image.resetParams') }}</button>
+            <button class="btn btn-primary" type="button" @click="saveBatchImageParams">{{ t('common.save') }}</button>
+          </footer>
+        </div>
+      </div>
+
       <div v-if="batchVideoConfirm.open" class="overlay" @click.self="batchVideoConfirm.open = false">
         <div class="dialog batch-video-dialog">
           <header class="dialog-head">
@@ -1432,9 +1636,9 @@ import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import {
   Users, FileText, FolderKanban, Clapperboard, Download, Loader2,
-  Plus, X, ListTodo, CircleHelp,
+  Plus, X, ListTodo, CircleHelp, SlidersHorizontal,
 } from 'lucide-vue-next'
-import { api, dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, propAPI, taskAPI, mergeAPI, aiConfigAPI, uploadAPI } from '~/composables/useApi'
+import { api, dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, propAPI, taskAPI, mergeAPI, aiConfigAPI, uploadAPI, settingsAPI } from '~/composables/useApi'
 import { startTour, autoTour } from '~/composables/useTour'
 import { useAgent } from '~/composables/useAgent'
 import { toastError, mapError, MODERATION_RE } from '~/composables/useToast'
@@ -1561,23 +1765,141 @@ const prodTabIdx = computed({
 const imageConfigs = ref([])
 const videoConfigs = ref([])
 const textConfigs = ref([])
+const eggfansImageModels = ref([])
+const modelListsReady = ref(false)
 // 生成时可选模型：空串 = 跟随配置默认（models[0]）；选择持久化到 localStorage，刷新页面后保留
-const MODEL_STORE_KEYS = { chat: 'huobao:model:chat', image: 'huobao:model:image', video: 'huobao:model:video' }
-function readStoredModel(key, legacyKey = '') {
-  try { return localStorage.getItem(key) || (legacyKey && localStorage.getItem(legacyKey)) || '' } catch { return '' }
+const MODEL_STORE_KEYS = { chat: 'huobao:model:chat', image: 'huobao:model:image', scene: 'huobao:model:scene-image', video: 'huobao:model:video' }
+const MODEL_COOKIE_KEY = 'huobao_models'
+
+// Electron starts the backend on a new localhost port each time. Cookies are
+// host-scoped, so they retain model choices across restarts; localStorage is
+// kept as a same-port fallback and migration source for existing users.
+function readModelCookie() {
+  try {
+    const entry = document.cookie
+      .split('; ')
+      .find(item => item.startsWith(`${MODEL_COOKIE_KEY}=`))
+    if (!entry) return null
+    const parsed = JSON.parse(decodeURIComponent(entry.slice(MODEL_COOKIE_KEY.length + 1)))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch { return null }
 }
+function writeModelCookie(models) {
+  try {
+    document.cookie = `${MODEL_COOKIE_KEY}=${encodeURIComponent(JSON.stringify(models))}; path=/; max-age=31536000; SameSite=Lax`
+  } catch { /* silent fallback to localStorage */ }
+}
+function readStoredModels() {
+  const cookieModels = readModelCookie()
+  if (cookieModels) return cookieModels
+
+  const models = {}
+  try {
+    for (const [category, key] of Object.entries(MODEL_STORE_KEYS)) {
+      const legacyKey = category === 'chat' ? 'huobao:model:rewrite' : ''
+      const value = localStorage.getItem(key) || (legacyKey && localStorage.getItem(legacyKey)) || ''
+      if (value) models[category] = value
+    }
+  } catch { /* localStorage may be unavailable */ }
+  writeModelCookie(models)
+  return models
+}
+const storedModels = readStoredModels()
 // 顶栏文本模型：适用于所有 Chat Agent 调用（改写/提取/拆镜/视频提示词/最终提示词），空串 = 跟随配置默认
-const chatModel = ref(readStoredModel(MODEL_STORE_KEYS.chat, 'huobao:model:rewrite'))
-const imageModel = ref(readStoredModel(MODEL_STORE_KEYS.image))
-const videoModel = ref(readStoredModel(MODEL_STORE_KEYS.video))
-function persistModel(modelRef, key) {
+const chatModel = ref(storedModels.chat || '')
+const imageModel = ref(storedModels.image || '')
+const sceneModel = ref(storedModels.scene || '')
+const videoModel = ref(storedModels.video || '')
+const videoAssetReferenceMode = ref('uri')
+const videoAssetReferenceModeReady = ref(false)
+const videoAssetReferenceModeSaving = ref(false)
+let videoAssetReferenceModePromise = null
+
+async function loadVideoAssetReferenceMode() {
+  if (videoAssetReferenceModeReady.value) return videoAssetReferenceMode.value
+  if (videoAssetReferenceModePromise) return videoAssetReferenceModePromise
+  videoAssetReferenceModePromise = settingsAPI.videoReferenceMode()
+    .then((data) => {
+      videoAssetReferenceMode.value = data?.asset_reference_mode === 'url' ? 'url' : 'uri'
+      return videoAssetReferenceMode.value
+    })
+    .catch(() => videoAssetReferenceMode.value)
+    .finally(() => {
+      videoAssetReferenceModeReady.value = true
+      videoAssetReferenceModePromise = null
+    })
+  return videoAssetReferenceModePromise
+}
+
+async function changeVideoAssetReferenceMode(mode) {
+  if (!['uri', 'url'].includes(mode) || mode === videoAssetReferenceMode.value || videoAssetReferenceModeSaving.value) return
+  const previous = videoAssetReferenceMode.value
+  videoAssetReferenceMode.value = mode
+  videoAssetReferenceModeSaving.value = true
+  try {
+    const data = await settingsAPI.setVideoReferenceMode(mode)
+    videoAssetReferenceMode.value = data?.asset_reference_mode === 'url' ? 'url' : 'uri'
+    const labelKey = videoAssetReferenceMode.value === 'uri' ? 'referenceModeUri' : 'referenceModeUrl'
+    toast.success(t('episode.vid.referenceModeSwitched', { mode: t(`episode.vid.${labelKey}`) }))
+  } catch (e) {
+    videoAssetReferenceMode.value = previous
+    toastError(e)
+  } finally {
+    videoAssetReferenceModeSaving.value = false
+  }
+}
+const IMAGE_PARAMS_KEY = 'eggfans:asset-image-params:v2'
+const DEFAULT_IMAGE_PARAMS = Object.freeze({
+  size: '3840x2160',
+  n: 1,
+  quality: 'high',
+  moderation: 'low',
+  format: 'jpeg',
+  response_format: 'url',
+  prompt_suffix: '',
+})
+function readBatchImageParams() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(IMAGE_PARAMS_KEY) || '{}')
+    return { ...DEFAULT_IMAGE_PARAMS, ...stored }
+  } catch {
+    return { ...DEFAULT_IMAGE_PARAMS }
+  }
+}
+const imageParamsOpen = ref(false)
+const batchImageParams = reactive(readBatchImageParams())
+function normalizedBatchImageParams() {
+  return {
+    size: String(batchImageParams.size || '3840x2160').trim(),
+    n: Math.min(10, Math.max(1, Math.trunc(Number(batchImageParams.n) || 1))),
+    quality: String(batchImageParams.quality || 'high'),
+    moderation: batchImageParams.moderation === 'auto' ? 'auto' : 'low',
+    format: String(batchImageParams.format || 'png'),
+    response_format: batchImageParams.response_format === 'b64_json' ? 'b64_json' : 'url',
+    prompt_suffix: String(batchImageParams.prompt_suffix || '').trim() || undefined,
+  }
+}
+function saveBatchImageParams() {
+  Object.assign(batchImageParams, normalizedBatchImageParams())
+  try { localStorage.setItem(IMAGE_PARAMS_KEY, JSON.stringify(batchImageParams)) } catch {}
+  imageParamsOpen.value = false
+  toast.success(t('episode.image.paramsSaved'))
+}
+function resetBatchImageParams() {
+  Object.assign(batchImageParams, DEFAULT_IMAGE_PARAMS)
+}
+function persistModel(modelRef, category, key) {
   watch(modelRef, v => {
+    if (v) storedModels[category] = v
+    else delete storedModels[category]
+    writeModelCookie(storedModels)
     try { v ? localStorage.setItem(key, v) : localStorage.removeItem(key) } catch {}
   })
 }
-persistModel(chatModel, MODEL_STORE_KEYS.chat)
-persistModel(imageModel, MODEL_STORE_KEYS.image)
-persistModel(videoModel, MODEL_STORE_KEYS.video)
+persistModel(chatModel, 'chat', MODEL_STORE_KEYS.chat)
+persistModel(imageModel, 'image', MODEL_STORE_KEYS.image)
+persistModel(sceneModel, 'scene', MODEL_STORE_KEYS.scene)
+persistModel(videoModel, 'video', MODEL_STORE_KEYS.video)
 // 左侧菜单栏收起/展开：收起为窄图标栏给内容区让位，持久化到 localStorage
 const SIDEBAR_COLLAPSED_KEY = 'huobao:sidebar-collapsed'
 const sidebarCollapsed = ref((() => {
@@ -1604,6 +1926,9 @@ const genTasks = ref([])
 const genMerges = ref([])
 const taskDrawer = ref(false)
 let genTasksTimer = null
+const VIDEO_TASK_POLL_INTERVAL_MS = 4000
+const VIDEO_TASK_POLL_MAX_ATTEMPTS = 900 // 60 分钟，覆盖后端视频任务最长约 50 分钟的轮询窗口
+const activeVideoPollTaskIds = new Set()
 
 function openTaskDrawer() {
   taskDrawer.value = true
@@ -1878,6 +2203,29 @@ function assetImageSrc(item) {
   return `/${raw}`
 }
 
+function versionLocalAssetSrc(src, item) {
+  if (!src || !src.includes('/static/')) return src
+  const version = item?.updated_at || item?.updatedAt
+  if (!version) return src
+  return `${src}${src.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(version))}`
+}
+
+function assetDisplaySrc(item) {
+  return versionLocalAssetSrc(assetImageSrc(item), item)
+}
+
+function assetThumbSrc(item) {
+  return versionLocalAssetSrc(thumbOf(assetImageSrc(item)), item)
+}
+
+function assetPublicUrl(item) {
+  return String(item?.public_url || item?.publicUrl || '').trim()
+}
+
+function assetVirtualUri(item) {
+  return String(item?.virtual_asset_uri || item?.virtualAssetUri || '').trim()
+}
+
 function assetDetailTitle(detail) {
   if (!detail?.item) return ''
   if (detail.type === 'character') return detail.item.name || t('episode.asset.unnamedChar')
@@ -2033,16 +2381,28 @@ const lockedVideoConfigId = computed(() => episode.value?.video_config_id || epi
 // 内部统一存 480p/720p/1080p 三档，界面按当前选中的视频模型显示厂商原生档位
 // （Seedance 480p/720p、MiniMax 768P/2K、Wan 3.0 480P/720P/1080P），适配器再映射为官方枚举
 const RESOLUTION_TIERS = {
+  eggfans: ['720p'],
   volcengine: ['480p', '720p'],
   minimax: ['720p', '1080p'],
+  autodl: ['480p', '720p'],
   aliyun: ['480p', '720p', '1080p'],
 }
 const RESOLUTION_DISPLAY = {
+  eggfans: { '720p': '720p' },
   volcengine: { '480p': '480p', '720p': '720p', '1080p': '720p' },
   minimax: { '480p': '768P', '720p': '768P', '1080p': '2K' },
+  autodl: { '480p': '480p', '720p': '768p' },
   aliyun: { '480p': '480P', '720p': '720P', '1080p': '1080P' },
 }
-const resolutionProvider = computed(() => RESOLUTION_TIERS[selectedVideoConfig.value?.provider] ? selectedVideoConfig.value.provider : 'volcengine')
+const EGGFANS_SD25_MODEL_RE = /^sd-2\.5-/i
+function isEggfansSd25Model(model) {
+  return EGGFANS_SD25_MODEL_RE.test(String(model || '').trim())
+}
+const resolutionProvider = computed(() => {
+  const provider = selectedVideoConfig.value?.provider
+  if (provider === 'eggfans' && !isEggfansSd25Model(effectiveVideoModelLabel.value)) return 'volcengine'
+  return RESOLUTION_TIERS[provider] ? provider : 'volcengine'
+})
 const resolutionOptions = computed(() => RESOLUTION_TIERS[resolutionProvider.value].map(key => ({
   key,
   model: `${RESOLUTION_DISPLAY[resolutionProvider.value][key]} · ${t(`episode.resolution.${key === '480p' ? 'smooth' : key === '720p' ? 'hd' : 'uhd'}`)}`,
@@ -2067,15 +2427,40 @@ async function changeEpisodeResolution(val) {
     toastError(e)
   }
 }
-// 画面比例在创建项目时固定，视频生成统一使用
-const dramaAspectRatio = computed(() => drama.value?.aspect_ratio || drama.value?.aspectRatio || '16:9')
+// 项目级视频比例：顶栏修改后持久化到 dramas.aspect_ratio，单个与批量视频统一使用。
+const aspectRatioOptions = computed(() => ([
+  { key: '16:9', model: `16:9 · ${t('index.ratio.landscape')}` },
+  { key: '9:16', model: `9:16 · ${t('index.ratio.portrait')}` },
+  { key: '1:1', model: `1:1 · ${t('index.ratio.square')}` },
+  { key: 'adaptive', model: t('index.ratio.adaptive') },
+]))
+const dramaAspectRatio = computed({
+  get: () => drama.value?.aspect_ratio || drama.value?.aspectRatio || '16:9',
+  set: val => { void changeDramaAspectRatio(val) },
+})
+async function changeDramaAspectRatio(val) {
+  if (!drama.value || val === dramaAspectRatio.value) return
+  const previousSnake = drama.value.aspect_ratio
+  const previousCamel = drama.value.aspectRatio
+  drama.value.aspect_ratio = val
+  drama.value.aspectRatio = val
+  try {
+    await dramaAPI.update(dramaId, { aspect_ratio: val })
+    toast.success(t('episode.vid.aspectRatioSwitched', { ratio: val }))
+  } catch (e) {
+    drama.value.aspect_ratio = previousSnake
+    drama.value.aspectRatio = previousCamel
+    toastError(e)
+  }
+}
 
 // 生成可选模型列表：配置中的模型数组（首位为配置默认）；API 可能返回数组或 JSON 字符串
 function configModels(cfg) {
   const raw = cfg?.model
   if (!raw) return []
-  if (Array.isArray(raw)) return raw.filter(Boolean)
-  try { const m = JSON.parse(raw); return Array.isArray(m) ? m.filter(Boolean) : [m].filter(Boolean) } catch { return [raw].filter(Boolean) }
+  const normalize = model => model === 'gemini-3-pro-preview' ? 'gemini-3.1-pro-preview' : model
+  if (Array.isArray(raw)) return raw.filter(Boolean).map(normalize)
+  try { const m = JSON.parse(raw); return (Array.isArray(m) ? m.filter(Boolean) : [m].filter(Boolean)).map(normalize) } catch { return [raw].filter(Boolean).map(normalize) }
 }
 // 汇总该类型全部启用配置的模型（按 厂商+模型 去重，按优先级排序），选中模型时连同所属配置一起调用
 // 选中值使用 'provider/model' 复合键：同名模型可能来自不同厂商（如中转站与官方），必须区分
@@ -2107,7 +2492,31 @@ function hasMultiConfigs(options) {
 }
 const textModelOptions = computed(() => collectModelOptions(textConfigs.value))
 const imageModelOptions = computed(() => collectModelOptions(imageConfigs.value))
+const sceneImageModelOptions = computed(() => {
+  const base = collectModelOptions(imageConfigs.value)
+  const eggfansConfigs = [...imageConfigs.value]
+    .filter(c => c.is_active && c.provider === 'eggfans')
+    .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+  const owner = eggfansConfigs[0]
+  if (!owner) return base
+  const seen = new Set(base.map(o => o.key))
+  for (const model of eggfansImageModels.value) {
+    const key = `eggfans/${model}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    base.push({ key, model, provider: 'eggfans', configId: owner.id, configName: owner.name || 'Eggfans' })
+  }
+  return base
+})
 const videoModelOptions = computed(() => collectModelOptions(videoConfigs.value))
+const effectiveImageModelLabel = computed(() => {
+  const explicit = bareModelName(imageModel.value)
+  if (explicit) return explicit
+  const active = [...imageConfigs.value]
+    .filter(config => config.is_active)
+    .sort((a, b) => (b.priority || 0) - (a.priority || 0))[0]
+  return configModels(active)[0] || ''
+})
 const selectedVideoConfig = computed(() => {
   const selected = videoModelOptions.value.find(option => option.key === videoModel.value)
   if (selected) return videoConfigs.value.find(config => config.id === selected.configId)
@@ -2119,9 +2528,15 @@ const selectedVideoConfig = computed(() => {
 })
 const isWan3Video = computed(() => selectedVideoConfig.value?.provider === 'aliyun'
   || bareModelName(videoModel.value).startsWith('wan3.0-video'))
+const isEggfansSd25 = computed(() => selectedVideoConfig.value?.provider === 'eggfans'
+  && isEggfansSd25Model(effectiveVideoModelLabel.value))
+const isAutoDLH3 = computed(() => selectedVideoConfig.value?.provider === 'autodl'
+  && effectiveVideoModelLabel.value === 'minimax_h3_zm_u24')
+const videoDurationMin = computed(() => isAutoDLH3.value ? 1 : isWan3Video.value ? 2 : 4)
+const videoDurationMax = computed(() => isWan3Video.value || isEggfansSd25.value ? 30 : 15)
 
-// 参考图上限（Wan 3.0 官方 10 张，其他模型 9 张），绑定素材收集与 @名字 映射统一读取
-const refImageLimit = computed(() => isWan3Video.value ? 10 : 9)
+// 参考图上限按供应商能力约束，绑定素材收集与 @名字映射统一读取。
+const refImageLimit = computed(() => isEggfansSd25.value ? 30 : isWan3Video.value ? 10 : 9)
 
 // 本次生成的生效配置（模型/分辨率/时长），用于右侧小结与批量确认弹窗
 const effectiveVideoModelLabel = computed(() => {
@@ -2172,7 +2587,8 @@ function confirmBatchVideos() {
 
 // 配置变化后校验持久化的模型是否仍存在（配置被删/模型被移除时回退默认，避免把失效模型传给后端）
 function pruneStaleModel(modelRef, optionsRef) {
-  watch(optionsRef, opts => {
+  watch([optionsRef, modelListsReady], ([opts, ready]) => {
+    if (!ready) return
     if (!modelRef.value || !opts.length) return
     if (opts.some(o => o.key === modelRef.value)) return
     // 旧版本地存储只有裸模型名：能对上则升级为复合键，对不上回退默认
@@ -2182,6 +2598,7 @@ function pruneStaleModel(modelRef, optionsRef) {
 }
 pruneStaleModel(chatModel, textModelOptions)
 pruneStaleModel(imageModel, imageModelOptions)
+pruneStaleModel(sceneModel, sceneImageModelOptions)
 pruneStaleModel(videoModel, videoModelOptions)
 const textModelMultiCfg = computed(() => hasMultiConfigs(textModelOptions.value))
 const imageModelMultiCfg = computed(() => hasMultiConfigs(imageModelOptions.value))
@@ -2226,6 +2643,14 @@ async function loadGenTasks() {
     }
     pendingVideoIds.value = [...pending]
     failedVideoMessages.value = failed
+
+    // 页面刷新或重新进入工作台后，继续接管后端仍在执行的视频任务。
+    // 每个任务只保留一个轮询器，完成时 pollVideoGeneration 会刷新分镜视频地址。
+    for (const [sbId, task] of latestBySb) {
+      if (task.status === 'processing' && task.id) {
+        void pollVideoGeneration(task.id, Number(sbId), { notifyCompletion: false })
+      }
+    }
   } catch { /* 静默失败,不打断其他刷新 */ }
 }
 
@@ -2613,6 +3038,11 @@ async function refresh() {
       try { chars.value = await episodeAPI.characters(ep.id) } catch { chars.value = [] }
       try { scenes.value = await episodeAPI.scenes(ep.id) } catch { scenes.value = [] }
       try { propItems.value = await episodeAPI.props(ep.id) } catch { propItems.value = [] }
+      if (assetDetail.value.open && assetDetail.value.item?.id) {
+        const detailList = assetDetail.value.type === 'character' ? chars.value : assetDetail.value.type === 'scene' ? scenes.value : propItems.value
+        const refreshedItem = detailList.find(item => item.id === assetDetail.value.item.id)
+        if (refreshedItem) assetDetail.value.item = refreshedItem
+      }
       sbs.value = await episodeAPI.storyboards(ep.id)
       selectedVideoSbIds.value = selectedVideoSbIds.value.filter(id => sbs.value.some(sb => sb.id === id))
       if (sbs.value.length) {
@@ -2792,8 +3222,12 @@ function doBreakdown() {
   const propList = propItems.value.length
     ? propItems.value.map(p => `${p.name}(ID:${p.id})`).join('、')
     : '（当前集还没有道具）'
+  const sd25Rules = isEggfansSd25.value
+    ? `\n\n${effectiveVideoModelLabel.value} 专用拆解模式（必须严格遵守）：\n- 每个分镜 duration 固定为 30 秒。\n- 每个分镜参考图片最多 30 张、参考视频最多 10 个、参考音频最多 10 个。\n- 不要使用通用的 8-15 秒时长规则；video_prompt 按 3 秒分段描述，但总时长必须保持 30 秒。`
+    : ''
   runAgent('storyboard_breaker', `请基于当前集剧本拆分分镜，并为每个分镜段落同时生成 video_prompt（视频生成提示词）。
 本次视频模型：${effectiveVideoModelLabel.value}，请按该模型的特性与时长限制生成 video_prompt。
+${sd25Rules}
 
 当前集已有角色：${charList}
 当前集已有场景：${sceneList}
@@ -2809,6 +3243,10 @@ function doBreakdown() {
 /** 拆分完成后刷新并自动补齐缺失的视频提示词（兜住 Agent 漏写/截断） */
 async function onBreakdownDone() {
   await refresh()
+  if (isEggfansSd25.value) {
+    await Promise.all(sbs.value.filter(sb => Number(sb.duration) !== 30).map(sb => storyboardAPI.update(sb.id, { duration: 30 })))
+    await refresh()
+  }
   const missing = sbs.value.filter(sb => !(sb.video_prompt || sb.videoPrompt || '').trim())
   if (missing.length) batchVideoPrompts()
 }
@@ -2857,8 +3295,100 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
   })()
 }
 
+function assetImageValue(kind, id) {
+  const rows = kind === 'character' ? chars.value : kind === 'scene' ? scenes.value : propItems.value
+  const item = rows.find(row => row.id === id)
+  return String(item?.image_url || item?.imageUrl || '')
+}
+
+function assetImageReady(kind, id, previousImages = new Map()) {
+  const current = assetImageValue(kind, id)
+  if (!current) return false
+  const previous = previousImages.get(id)
+  return !previous || current !== previous
+}
+
+function clearPendingAssetImages(kind, ids) {
+  const target = kind === 'character' ? pendingCharImageIds : kind === 'scene' ? pendingSceneImageIds : pendingPropImageIds
+  target.value = target.value.filter(id => !ids.includes(id))
+}
+
+function assetRowsRef(kind) {
+  return kind === 'character' ? chars : kind === 'scene' ? scenes : propItems
+}
+
+function assetApiClient(kind) {
+  return kind === 'character' ? characterAPI : kind === 'scene' ? sceneAPI : propAPI
+}
+
+async function refreshAssetCard(kind, id) {
+  const fresh = await assetApiClient(kind).get(id)
+  const rows = assetRowsRef(kind).value
+  const current = rows.find(item => item.id === id)
+  if (current) Object.assign(current, fresh)
+  if (assetDetail.value.open && assetDetail.value.type === kind && assetDetail.value.item?.id === id && assetDetail.value.item !== current) {
+    Object.assign(assetDetail.value.item, fresh)
+  }
+  return current || fresh
+}
+
+function imageGenerationTaskId(result) {
+  const id = Number(result?.image_generation_id || result?.imageGenerationId || result?.id)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
+function imageGenerationTaskMap(id, result) {
+  const taskId = imageGenerationTaskId(result)
+  return taskId ? new Map([[id, taskId]]) : new Map()
+}
+
+async function refreshAssetPublicUrl(kind, id, attempts = 12) {
+  for (let i = 0; i < attempts; i++) {
+    const current = assetRowsRef(kind).value.find(item => item.id === id)
+    if (assetPublicUrl(current)) return
+    await sleep(2500)
+    try { await refreshAssetCard(kind, id) } catch { /* retry quietly */ }
+  }
+}
+
+function watchAssetImageResult(kind, ids, attempts = 120, previousImages = new Map(), taskIds = new Map()) {
+  const notifiedFailed = new Set()
+  const completedIds = new Set()
+  void (async () => {
+    for (let i = 0; i < attempts; i++) {
+      await sleep(2500)
+      const unresolved = ids.filter(id => !completedIds.has(id) && !notifiedFailed.has(id))
+      await Promise.all(unresolved.map(async id => {
+        try {
+          const taskId = taskIds.get(id)
+          if (taskId) {
+            const task = await taskAPI.get(taskId)
+            if (task?.status === 'failed') {
+              notifiedFailed.add(id)
+              clearPendingAssetImages(kind, [id])
+              toastError(task.error_msg || task.errorMsg || t('episode.image.generationFailed'))
+              return
+            }
+            if (task?.status !== 'completed') return
+          }
+
+          await refreshAssetCard(kind, id)
+          if (!assetImageReady(kind, id, previousImages)) return
+          completedIds.add(id)
+          clearPendingAssetImages(kind, [id])
+          void refreshAssetPublicUrl(kind, id)
+        } catch { /* transient polling error */ }
+      }))
+      if (completedIds.size + notifiedFailed.size >= ids.length) return
+    }
+    clearPendingAssetImages(kind, ids)
+    toast.warning(t('episode.image.waitTimeout'))
+  })()
+}
+
 async function genCharImg(id) {
   try {
+    const previousImages = new Map([[id, assetImageValue('character', id)]])
     if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
     const char = chars.value.find(c => c.id === id)
     if (char && !(char.final_prompt || char.finalPrompt)) {
@@ -2867,15 +3397,9 @@ async function genCharImg(id) {
         await ensureAssetPrompt('character', id)
       } catch {} // 提示词生成失败不阻断：后端生图前会再兜底生成或回退本地拼接
     }
-    await characterAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId())
+    const result = await characterAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId(), normalizedBatchImageParams())
     toast.success(t('episode.image.generatingChar'))
-    await refresh()
-    watchAsyncResult(() => {
-      const char = chars.value.find(c => c.id === id)
-      const done = !!(char?.image_url || char?.imageUrl)
-      if (done) pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
-      return done
-    })
+    watchAssetImageResult('character', [id], 120, previousImages, imageGenerationTaskMap(id, result))
   } catch (e) {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
     toastError(e)
@@ -2885,15 +3409,10 @@ function batchCharImages() {
   const ids = visualChars.value.filter(c => !(c.image_url || c.imageUrl)).map(c => c.id)
   if (!ids.length) { toast.info(t('episode.image.allCharsDone')); return }
   pendingCharImageIds.value = [...new Set([...pendingCharImageIds.value, ...ids])]
-  characterAPI.batchImages(ids, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(async () => {
+  characterAPI.batchImages(ids, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId(), normalizedBatchImageParams()).then(result => {
     toast.success(t('episode.image.batchGeneratingChar'))
-    await refresh()
-    watchAsyncResult(() => ids.every(id => {
-      const char = chars.value.find(c => c.id === id)
-      const done = !!(char?.image_url || char?.imageUrl)
-      if (done) pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
-      return done
-    }), 36)
+    const taskIds = new Map((result?.items || []).map(item => [Number(item.character_id || item.characterId), Number(item.image_generation_id || item.imageGenerationId)]))
+    watchAssetImageResult('character', ids, 120, new Map(), taskIds)
   }).catch(e => {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => !ids.includes(item))
     toastError(e)
@@ -2901,6 +3420,7 @@ function batchCharImages() {
 }
 async function genSceneImg(id) {
   try {
+    const previousImages = new Map([[id, assetImageValue('scene', id)]])
     if (!isPendingSceneImage(id)) pendingSceneImageIds.value.push(id)
     const scene = scenes.value.find(s => s.id === id)
     if (scene && !(scene.final_prompt || scene.finalPrompt)) {
@@ -2909,15 +3429,9 @@ async function genSceneImg(id) {
         await ensureAssetPrompt('scene', id)
       } catch {} // 提示词生成失败不阻断：后端生图前会再兜底生成或回退本地拼接
     }
-    await sceneAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId())
+    const result = await sceneAPI.generateImage(id, epId.value, bareModelName(sceneModel.value) || undefined, ownerConfigId(sceneImageModelOptions.value, sceneModel.value), chatModelOverride(), chatConfigId(), normalizedBatchImageParams())
     toast.success(t('episode.image.generatingScene'))
-    await refresh()
-    watchAsyncResult(() => {
-      const scene = scenes.value.find(s => s.id === id)
-      const done = !!(scene?.image_url || scene?.imageUrl)
-      if (done) pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
-      return done
-    })
+    watchAssetImageResult('scene', [id], 120, previousImages, imageGenerationTaskMap(id, result))
   } catch (e) {
     pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
     toastError(e)
@@ -2928,6 +3442,7 @@ function isPendingPropImage(id) {
 }
 async function genPropImg(id) {
   try {
+    const previousImages = new Map([[id, assetImageValue('prop', id)]])
     if (!isPendingPropImage(id)) pendingPropImageIds.value.push(id)
     const prop = propItems.value.find(p => p.id === id)
     if (prop && !(prop.final_prompt || prop.finalPrompt)) {
@@ -2936,45 +3451,45 @@ async function genPropImg(id) {
         await ensureAssetPrompt('prop', id)
       } catch {} // 提示词生成失败不阻断：后端生图前会再兜底生成或回退本地拼接
     }
-    await propAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId())
+    const result = await propAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId(), normalizedBatchImageParams())
     toast.success(t('episode.image.generatingProp'))
-    await refresh()
-    watchAsyncResult(() => {
-      const prop = propItems.value.find(p => p.id === id)
-      const done = !!(prop?.image_url || prop?.imageUrl)
-      if (done) pendingPropImageIds.value = pendingPropImageIds.value.filter(item => item !== id)
-      return done
-    })
+    watchAssetImageResult('prop', [id], 120, previousImages, imageGenerationTaskMap(id, result))
   } catch (e) {
     pendingPropImageIds.value = pendingPropImageIds.value.filter(item => item !== id)
     toastError(e)
   }
 }
+
+async function submitPerAssetImageBatch(kind, ids, submit) {
+  const startedIds = []
+  const taskIds = new Map()
+  await Promise.all(ids.map(async id => {
+    try {
+      const result = await submit(id)
+      startedIds.push(id)
+      const taskId = imageGenerationTaskId(result)
+      if (taskId) taskIds.set(id, taskId)
+    } catch (e) {
+      clearPendingAssetImages(kind, [id])
+      toastError(e)
+    }
+  }))
+  if (startedIds.length) watchAssetImageResult(kind, startedIds, 120, new Map(), taskIds)
+}
+
 function batchSceneImages() {
   const ids = scenes.value.filter(s => !(s.image_url || s.imageUrl)).map(s => s.id)
   if (!ids.length) { toast.info(t('episode.image.allScenesDone')); return }
   pendingSceneImageIds.value = [...new Set([...pendingSceneImageIds.value, ...ids])]
-  ids.forEach(id => { sceneAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(() => refresh()).catch(e => toastError(e)) })
   toast.success(t('episode.image.batchGeneratingScene'))
-  watchAsyncResult(() => ids.every(id => {
-    const scene = scenes.value.find(s => s.id === id)
-    const done = !!(scene?.image_url || scene?.imageUrl)
-    if (done) pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
-    return done
-  }), 36)
+  void submitPerAssetImageBatch('scene', ids, id => sceneAPI.generateImage(id, epId.value, bareModelName(sceneModel.value) || undefined, ownerConfigId(sceneImageModelOptions.value, sceneModel.value), chatModelOverride(), chatConfigId(), normalizedBatchImageParams()))
 }
 function batchPropImages() {
   const ids = propItems.value.filter(p => !(p.image_url || p.imageUrl)).map(p => p.id)
   if (!ids.length) { toast.info(t('episode.image.allPropsDone')); return }
   pendingPropImageIds.value = [...new Set([...pendingPropImageIds.value, ...ids])]
-  ids.forEach(id => { propAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(() => refresh()).catch(e => toastError(e)) })
   toast.success(t('episode.image.batchGeneratingProp'))
-  watchAsyncResult(() => ids.every(id => {
-    const prop = propItems.value.find(p => p.id === id)
-    const done = !!(prop?.image_url || prop?.imageUrl)
-    if (done) pendingPropImageIds.value = pendingPropImageIds.value.filter(item => item !== id)
-    return done
-  }), 36)
+  void submitPerAssetImageBatch('prop', ids, id => propAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId(), normalizedBatchImageParams()))
 }
 function getVideoUrl(s) { return s?.video_url || s?.videoUrl || s?.composed_video_url || s?.composedVideoUrl || null }
 function hasVid(s) { return !!getVideoUrl(s) }
@@ -3040,12 +3555,12 @@ function getShotReferenceImages(sb) {
     refs.push(value)
   }
   const scene = getStoryboardScene(sb)
-  pushRef(scene?.image_url || scene?.imageUrl)
+  pushRef(assetPublicUrl(scene) || scene?.image_url || scene?.imageUrl)
   for (const char of getStoryboardCharacters(sb)) {
-    pushRef(char?.image_url || char?.imageUrl)
+    pushRef(assetPublicUrl(char) || char?.image_url || char?.imageUrl)
   }
   for (const prop of getStoryboardProps(sb)) {
-    pushRef(prop?.image_url || prop?.imageUrl)
+    pushRef(assetPublicUrl(prop) || prop?.image_url || prop?.imageUrl)
   }
   return refs
 }
@@ -3204,8 +3719,8 @@ function resolveVideoPromptRefs(sb) {
 function onVideoDurationChange(e) {
   const sb = selectedSb.value
   if (!sb) return
-  const min = isWan3Video.value ? 2 : 4
-  const max = isWan3Video.value ? 30 : 15
+  const min = videoDurationMin.value
+  const max = videoDurationMax.value
   let v = Math.round(Number(e.target.value))
   if (!Number.isFinite(v)) v = Number(sb.duration || 10)
   v = Math.min(max, Math.max(min, v))
@@ -3229,7 +3744,42 @@ const assetUploadLabelMap = computed(() => ({
   prop: t('episode.asset.propImage'),
 }))
 const uploadingAssetKeys = ref([])
+const uploadingPublicAssetKeys = ref([])
+const creatingVirtualAssetIds = ref([])
 function isUploadingAsset(kind, id) { return uploadingAssetKeys.value.includes(`${kind}:${id}`) }
+function isUploadingPublicAsset(kind, id) { return uploadingPublicAssetKeys.value.includes(`${kind}:${id}`) }
+function isCreatingVirtualAsset(id) { return creatingVirtualAssetIds.value.includes(Number(id)) }
+
+async function createCharacterVirtualAsset(id) {
+  const characterId = Number(id)
+  if (creatingVirtualAssetIds.value.includes(characterId)) return
+  creatingVirtualAssetIds.value.push(characterId)
+  try {
+    await characterAPI.virtualAsset(characterId)
+    await refreshAssetCard('character', characterId)
+    toast.success(t('episode.asset.virtualAssetDone'))
+  } catch (e) {
+    toastError(e, { fallback: 'episode.asset.virtualAssetFailed' })
+  } finally {
+    creatingVirtualAssetIds.value = creatingVirtualAssetIds.value.filter(item => item !== characterId)
+  }
+}
+
+async function retryAssetPublicUpload(kind, id) {
+  const key = `${kind}:${id}`
+  if (uploadingPublicAssetKeys.value.includes(key)) return
+  uploadingPublicAssetKeys.value.push(key)
+  try {
+    await uploadAPI.assetPublicUrl(kind, id)
+    await refreshAssetCard(kind, id)
+    toast.success(t('episode.asset.publicUploadDone'))
+  } catch (e) {
+    toastError(e, { fallback: 'episode.asset.publicUploadFailed' })
+  } finally {
+    uploadingPublicAssetKeys.value = uploadingPublicAssetKeys.value.filter(item => item !== key)
+  }
+}
+
 function uploadAssetImage(kind, id) {
   pickFile('image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp', async (file) => {
     const key = `${kind}:${id}`
@@ -3237,12 +3787,13 @@ function uploadAssetImage(kind, id) {
     try {
       const res = await uploadAPI.image(file)
       // 与生图回写保持一致：存相对路径（static/...），前端展示时补前导斜杠
-      const payload = { image_url: res.path, local_path: res.path }
+      const payload = { image_url: res.path, local_path: res.path, public_url: res.public_url || null }
       if (kind === 'character') await characterAPI.update(id, payload)
       else if (kind === 'scene') await sceneAPI.update(id, payload)
       else await propAPI.update(id, payload)
-      toast.success(t('episode.upload.assetDone', { type: assetUploadLabelMap.value[kind] || '' }))
-      await refresh()
+      await refreshAssetCard(kind, id)
+      if (res.public_url) toast.success(t('episode.upload.assetDoneWithPublicUrl', { type: assetUploadLabelMap.value[kind] || '' }))
+      else toast.warning(t('episode.upload.assetDonePublicFailed', { error: res.public_upload_error || t('episode.asset.publicUploadFailed') }))
     } catch (e) {
       toastError(e)
     } finally {
@@ -3252,6 +3803,7 @@ function uploadAssetImage(kind, id) {
 }
 
 async function genVid(sb, opts = {}) {
+  await loadVideoAssetReferenceMode()
   const referenceImages = getShotReferenceImages(sb)
   // 参考素材完全来自分镜绑定的角色/场景/道具图片
   const params = {
@@ -3259,11 +3811,13 @@ async function genVid(sb, opts = {}) {
     drama_id: dramaId,
     prompt: resolveVideoPromptRefs(sb),
     duration: Number(sb.duration || 10),
+    resolution: episodeResolution.value,
     aspect_ratio: dramaAspectRatio.value,
     generate_audio: true,
     model: bareModelName(videoModel.value) || undefined,
     config_id: ownerConfigId(videoModelOptions.value, videoModel.value),
     reference_image_urls: referenceImages,
+    asset_reference_mode: videoAssetReferenceMode.value,
   }
   if (!params.prompt && !referenceImages.length) {
     toast.error(t('episode.vid.needRefOrPrompt'))
@@ -3275,7 +3829,7 @@ async function genVid(sb, opts = {}) {
     const generation = await taskAPI.generate({ type: 'video', ...params })
     if (!opts.silent) toast.success(t('episode.vid.generating'))
     await refresh()
-    pollVideoGeneration(generation?.id, sb.id)
+    void pollVideoGeneration(generation?.id, sb.id)
   } catch (e) {
     pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== sb.id)
     failedVideoMessages.value = {
@@ -3285,45 +3839,52 @@ async function genVid(sb, opts = {}) {
     toastError(e, { fallback: 'episode.vid.genFailed' })
   }
 }
-async function pollVideoGeneration(generationId, storyboardId) {
+async function pollVideoGeneration(generationId, storyboardId, options = {}) {
   if (!generationId) {
     watchAsyncResult(() => {
       const target = sbs.value.find(s => s.id === storyboardId)
       const done = !!(target?.video_url || target?.videoUrl)
       if (done) pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
       return done
-    }, 60, 4000)
+    }, VIDEO_TASK_POLL_MAX_ATTEMPTS, VIDEO_TASK_POLL_INTERVAL_MS)
     return
   }
-  for (let i = 0; i < 120; i++) {
-    await sleep(4000)
-    try {
-      const res = await taskAPI.get(generationId)
-      await refresh()
-      if (res?.status === 'completed') {
-        pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
-        delete failedVideoMessages.value[storyboardId]
-        toast.success(t('episode.vid.genDone'))
-        return
-      }
-      if (res?.status === 'failed') {
-        pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
-        const errMsg = res?.error_msg || res?.errorMsg || t('episode.vid.genFailed')
-        failedVideoMessages.value = {
-          ...failedVideoMessages.value,
-          [storyboardId]: errMsg,
+  const taskId = Number(generationId)
+  if (activeVideoPollTaskIds.has(taskId)) return
+  activeVideoPollTaskIds.add(taskId)
+  try {
+    for (let i = 0; i < VIDEO_TASK_POLL_MAX_ATTEMPTS; i++) {
+      await sleep(VIDEO_TASK_POLL_INTERVAL_MS)
+      try {
+        const res = await taskAPI.get(taskId)
+        await refresh()
+        if (res?.status === 'completed') {
+          const target = sbs.value.find(s => s.id === storyboardId)
+          const completedPath = taskVideoPath(res)
+          if (target && completedPath && !getVideoUrl(target)) target.video_url = completedPath
+          pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
+          delete failedVideoMessages.value[storyboardId]
+          if (options.notifyCompletion !== false) toast.success(t('episode.vid.genDone'))
+          return
         }
-        toastError(errMsg, { fallback: 'episode.vid.genFailed' })
-        return
-      }
-    } catch {}
+        if (res?.status === 'failed') {
+          pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
+          const errMsg = res?.error_msg || res?.errorMsg || t('episode.vid.genFailed')
+          failedVideoMessages.value = {
+            ...failedVideoMessages.value,
+            [storyboardId]: errMsg,
+          }
+          toastError(errMsg, { fallback: 'episode.vid.genFailed' })
+          return
+        }
+      } catch {}
+    }
+    // 后端视频轮询上限约 50 分钟。前端 60 分钟仍未拿到终态时保留“生成中”，
+    // 不把未知/网络中断伪装成失败；用户刷新页面后会从 sys_task 自动恢复轮询。
+    await loadGenTasks()
+  } finally {
+    activeVideoPollTaskIds.delete(taskId)
   }
-  pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
-  failedVideoMessages.value = {
-    ...failedVideoMessages.value,
-    [storyboardId]: t('episode.vid.genTimeout'),
-  }
-  toast.error(t('episode.vid.genTimeout'))
 }
 async function doMerge(ids) {
   const storyboardIds = Array.isArray(ids) ? ids : undefined
@@ -3353,18 +3914,27 @@ async function doMerge(ids) {
 }
 async function loadConfigs() {
   try {
-    const [imgCfgs, vidCfgs, txtCfgs] = await Promise.all([
+    const [imgCfgs, vidCfgs, txtCfgs, eggfansModels] = await Promise.all([
       aiConfigAPI.list('image'),
       aiConfigAPI.list('video'),
       aiConfigAPI.list('text'),
+      aiConfigAPI.eggfansModels().catch(() => []),
     ])
     imageConfigs.value = imgCfgs || []
     videoConfigs.value = vidCfgs || []
     textConfigs.value = txtCfgs || []
+    eggfansImageModels.value = Array.isArray(eggfansModels)
+      ? [...new Set(eggfansModels.map(model => model === 'gemini-3-pro-preview' ? 'gemini-3.1-pro-preview' : model))]
+      : []
   } catch (e) { console.error('Failed to load AI configs', e) }
+  finally { modelListsReady.value = true }
 }
 
-onMounted(async () => { await refresh(); loadConfigs(); syncExtractStatus() })
+onMounted(async () => {
+  await Promise.all([refresh(), loadVideoAssetReferenceMode()])
+  loadConfigs()
+  syncExtractStatus()
+})
 
 // ===== 应用内引导（工作台）：沿左侧进度栏走 6 步流水线 =====
 const EPISODE_TOUR = [
@@ -4181,6 +4751,9 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
 
 /* 资产分区标题：新增入口 + 卡片删除按钮 */
 .asset-section-title { display: flex; align-items: center; gap: 8px; }
+.asset-section-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.asset-model-inline { display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); font-size: 11px; font-weight: 600; }
+.asset-model-inline-select { min-width: 170px; height: 26px; padding: 3px 8px; font-size: 11px; }
 .asset-add-btn {
   display: inline-flex;
   align-items: center;
@@ -4405,6 +4978,34 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
   padding-right: 12px;
   border-right: 1px solid var(--border);
 }
+.video-reference-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.video-reference-mode-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.video-reference-mode-seg {
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+}
+.video-reference-mode-seg .seg-item {
+  min-width: 42px;
+  height: 20px;
+  padding: 0 7px;
+  font-size: 10px;
+  line-height: 20px;
+}
+.video-reference-mode-seg .seg-item:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
 .asset-final-prompt {
   display: flex;
   flex-direction: column;
@@ -4429,6 +5030,38 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
   color: var(--text-2);
 }
 .afp-text.dim { color: var(--text-3); }
+.asset-public-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+.asset-public-label {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-weight: 700;
+}
+.asset-public-link {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--success);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-public-missing {
+  min-width: 0;
+  flex: 1;
+  color: var(--warning);
+}
+.asset-public-action {
+  min-height: 24px;
+  padding: 2px 6px;
+  font-size: 10px;
+}
 .asset-final {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -4931,6 +5564,30 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
 }
 /* 批量生成确认弹窗 */
 .batch-video-dialog { width: 420px; max-width: calc(100vw - 48px); }
+.image-params-dialog { width: 560px; max-width: calc(100vw - 32px); }
+.image-params-subtitle { margin: 3px 0 0; color: var(--text-3); font-size: 11px; }
+.image-params-body { display: flex; flex-direction: column; gap: 14px; }
+.image-params-model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  font-size: 12px;
+}
+.image-params-model span { color: var(--text-3); }
+.image-params-model strong { color: var(--text-0); font-size: 11px; overflow-wrap: anywhere; }
+.image-params-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.image-params-wide { grid-column: 1 / -1; }
+.image-params-note { margin: 0; color: var(--text-3); font-size: 11px; line-height: 1.6; }
+.asset-btn-params { color: var(--text-1); }
+@media (max-width: 640px) {
+  .image-params-grid { grid-template-columns: minmax(0, 1fr); }
+  .image-params-wide { grid-column: auto; }
+}
 .batch-video-body { display: flex; flex-direction: column; gap: 10px; }
 .batch-video-row {
   display: flex;
@@ -5453,6 +6110,38 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.asset-detail-public {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--surface-outline);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+.asset-detail-public-head,
+.asset-detail-public-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.asset-detail-public-head > span:first-child {
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 720;
+}
+.asset-detail-public-link {
+  overflow-wrap: anywhere;
+  color: var(--success);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.asset-detail-public-empty > span {
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.45;
 }
 .asset-detail-text-block > div,
 .asset-detail-shot-list {

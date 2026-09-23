@@ -33,7 +33,7 @@ export function parseConfigTemperature(settingsRaw: string | null | undefined): 
 export const officialProviders: Record<ServiceType, readonly string[]> = {
   text: ['openai', 'gemini', 'volcengine', 'eggfans'],
   image: ['openai', 'gemini', 'volcengine', 'eggfans'],
-  video: ['volcengine', 'minimax', 'eggfans'],
+  video: ['volcengine', 'minimax', 'eggfans', 'autodl'],
 }
 
 export function isOfficialProvider(serviceType?: string | null, provider?: string | null): boolean {
@@ -48,6 +48,13 @@ export function getTextProviderBaseUrl(config: AIConfig) {
     return joinProviderUrl(config.baseUrl, '/v1', '')
   }
 
+  // Eggfans exposes an OpenAI-compatible API under /v1.  The settings
+  // connectivity probe already checks /v1/models; keep Agent chat requests on
+  // the same prefix or rewrites will hit /chat/completions at the host root.
+  if (provider === 'eggfans') {
+    return joinProviderUrl(config.baseUrl, '/v1', '')
+  }
+
   if (provider === 'gemini') {
     return joinProviderUrl(config.baseUrl, '/v1beta', '')
   }
@@ -57,6 +64,33 @@ export function getTextProviderBaseUrl(config: AIConfig) {
   }
 
   return config.baseUrl
+}
+
+/** Accept legacy settings that stored multiple models in one comma-delimited string. */
+export function parseModelList(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  const normalize = (value: string) => value === 'gemini-3-pro-preview' ? 'gemini-3.1-pro-preview' : value
+  try {
+    const parsed = JSON.parse(raw)
+    const values = Array.isArray(parsed) ? parsed : [parsed]
+    return values.flatMap(value => typeof value === 'string' ? value.split(/[，,]/) : [])
+      .map(value => value.trim())
+      .filter(Boolean)
+      .map(normalize)
+  } catch {
+    return raw.split(/[，,]/).map(value => value.trim()).filter(Boolean).map(normalize)
+  }
+}
+
+/** Repair UTF-8 text that was accidentally decoded as latin1 by a provider. */
+export function repairProviderText(value: string): string {
+  if (!/[ÃÂâåæçèéï¿½]/.test(value)) return value
+  try {
+    const repaired = Buffer.from(value, 'latin1').toString('utf8')
+    return repaired.includes('\ufffd') ? value : repaired
+  } catch {
+    return value
+  }
 }
 
 // Agent 多步循环会逐步重复解析同一配置，相同配置只打一次日志避免刷屏
@@ -76,7 +110,7 @@ export async function getActiveConfig(serviceType: ServiceType): Promise<AIConfi
     return null
   }
 
-  const models = active.model ? JSON.parse(active.model) : []
+  const models = parseModelList(active.model)
   const logKey = `${active.id}:${models[0] || ''}`
   if (lastLoggedActiveConfigKey.get(serviceType) !== logKey) {
     lastLoggedActiveConfigKey.set(serviceType, logKey)
@@ -132,7 +166,7 @@ export async function getConfigById(id: number): Promise<AIConfig | null> {
     })
     return null
   }
-  const models = row.model ? JSON.parse(row.model) : []
+  const models = parseModelList(row.model)
   const logKey = `${row.provider}:${models[0] || ''}:${row.serviceType}`
   if (lastLoggedConfigByIdKey.get(id) !== logKey) {
     lastLoggedConfigByIdKey.set(id, logKey)

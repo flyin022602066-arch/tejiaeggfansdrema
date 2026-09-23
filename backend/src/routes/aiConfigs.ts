@@ -3,11 +3,34 @@ import { eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
 import { success, notFound, created, badRequest, now } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
-import { joinProviderUrl } from '../services/adapters/url.js'
-import { isOfficialProvider, parseConfigTemperature } from '../services/ai.js'
+import { joinConfiguredEndpoint, joinProviderUrl } from '../services/adapters/url.js'
+import { isOfficialProvider, parseConfigTemperature, parseModelList } from '../services/ai.js'
 import { redactUrl, logTaskError, logTaskProgress, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
+
+// Eggfans pricing 页面由前端动态加载模型；这里做代理并只暴露可用于图片/多模态创作的
+// GPT、Gemini、Doubao 系列，避免浏览器跨域和把聊天/视频等无关模型塞进选择器。
+app.get('/eggfans-models', async (c) => {
+  try {
+    const response = await fetch('https://api.eggfans.com/api/pricing_new', {
+      signal: AbortSignal.timeout(15_000),
+      headers: { Accept: 'application/json' },
+    })
+    if (!response.ok) return c.json({ code: 502, message: `Eggfans pricing HTTP ${response.status}` }, 502)
+    const payload = await response.json()
+    const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload
+    const models = Array.from(new Set(
+      (Array.isArray(parsed?.data) ? parsed.data : [])
+        .map((row: any) => String(row?.model_name || '').trim())
+        .map((name: string) => name === 'gemini-3-pro-preview' ? 'gemini-3.1-pro-preview' : name)
+        .filter((name: string) => /^(gpt|gemini|doubao)-/i.test(name)),
+    ))
+    return success(c, models)
+  } catch (err: any) {
+    return c.json({ code: 502, message: `Eggfans 模型列表获取失败: ${err?.message || 'network error'}` }, 502)
+  }
+})
 
 /** 归一化 temperature 入参：null=未设置；合法值 0~2；非法抛错 */
 function normalizeTemperature(v: any): number | null {
@@ -21,7 +44,7 @@ function normalizeTemperature(v: any): number | null {
 function withParsedFields(r: any) {
   return {
     ...toSnakeCase(r),
-    model: r.model ? JSON.parse(r.model) : [],
+    model: parseModelList(r.model).map(model => model === 'gemini-3-pro-preview' ? 'gemini-3.1-pro-preview' : model),
     temperature: parseConfigTemperature(r.settings),
   }
 }
@@ -42,7 +65,7 @@ function geminiHeaders(apiKey?: string, withJson = false) {
   return headers
 }
 
-function buildProbe(serviceType: string, provider: string, baseUrl: string, model?: string, apiKey?: string) {
+function buildProbe(serviceType: string, provider: string, baseUrl: string, model?: string, apiKey?: string, queryEndpoint?: string) {
   const p = provider.toLowerCase()
   const m = model || ''
 
@@ -75,7 +98,7 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
       ? '/contents/generations/tasks'
       : serviceType === 'text'
         ? '/chat/completions'
-        : '/images/generations'
+        : '/v1/images/generations'
     return {
       method: 'POST',
       url: joinProviderUrl(baseUrl, '/api/v3', path),
@@ -91,6 +114,19 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
       url: joinProviderUrl(baseUrl, '/v2', '/video_generation'),
       headers: bearerHeaders(apiKey, true),
       body: {},
+    }
+  }
+
+  if (p === 'autodl') {
+    const template = queryEndpoint || '/api/v1/comfyui/comfyui_workflow/result/{taskId}'
+    return {
+      method: 'GET',
+      url: joinConfiguredEndpoint(baseUrl, template.replace(/\{taskId\}|\{task_id\}/gi, 'codex-connection-check')),
+      headers: {
+        Authorization: apiKey || '',
+        'Content-Type': 'application/json',
+      },
+      body: undefined,
     }
   }
 
@@ -180,7 +216,7 @@ app.post('/test', async (c) => {
   }
 
   const model = Array.isArray(body.model) ? body.model[0] : body.model
-  const probe = buildProbe(body.service_type, body.provider, body.base_url, model, body.api_key)
+  const probe = buildProbe(body.service_type, body.provider, body.base_url, model, body.api_key, body.query_endpoint)
   const probeUrl = redactUrl(probe.url)
 
   logTaskProgress('AIConfig', 'probe-start', {
@@ -197,7 +233,10 @@ app.post('/test', async (c) => {
       body: probe.body ? JSON.stringify(probe.body) : undefined,
     })
     const text = await resp.text()
-    const reachable = [200, 204, 400, 401, 403].includes(resp.status)
+    const reachableStatuses = body.provider.toLowerCase() === 'autodl'
+      ? [200, 204, 400, 401, 403, 404]
+      : [200, 204, 400, 401, 403]
+    const reachable = reachableStatuses.includes(resp.status)
     const payload = {
       ok: resp.ok,
       reachable,

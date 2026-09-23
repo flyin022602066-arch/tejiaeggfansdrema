@@ -9,6 +9,7 @@ import { VolcEngineVideoAdapter } from './volcengine-video'
 import { MiniMaxVideoAdapter } from './minimax-video'
 import { EggfansImageAdapter } from './eggfans-image'
 import { EggfansVideoAdapter } from './eggfans-video'
+import { AutoDLVideoAdapter } from './autodl-video'
 import type { ImageProviderAdapter, VideoProviderAdapter } from './types'
 
 // 图片 Adapter 注册表
@@ -24,6 +25,7 @@ export const videoAdapters: Record<string, VideoProviderAdapter> = {
   volcengine: new VolcEngineVideoAdapter(),
   minimax: new MiniMaxVideoAdapter(),
   eggfans: new EggfansVideoAdapter(),
+  autodl: new AutoDLVideoAdapter(),
 }
 
 /**
@@ -31,7 +33,13 @@ export const videoAdapters: Record<string, VideoProviderAdapter> = {
  * @param provider 厂商名称
  * @returns 对应的 Adapter
  */
-export function getImageAdapter(provider: string): ImageProviderAdapter {
+export function getImageAdapter(provider: string, model?: string | null): ImageProviderAdapter {
+  // Eggfans exposes Gemini's native generateContent endpoint under the same
+  // gateway. Route Gemini model IDs through the Gemini request/response
+  // contract instead of the OpenAI-compatible image endpoint.
+  if (provider.toLowerCase() === 'eggfans' && /^gemini-/i.test(String(model || ''))) {
+    return imageAdapters.gemini
+  }
   const adapter = imageAdapters[provider.toLowerCase()]
   if (!adapter) throw new Error(`Unsupported image provider: ${provider}`)
   return adapter

@@ -93,7 +93,7 @@ export const DEFAULT_PROMPTS: Record<string, { name: string; instructions: strin
 - character_ids：当前段落涉及的角色 ID 列表，可以为空，也可以包含多个角色；必须从 characters 中选择
 - prop_ids：当前段落出现的关键道具 ID 列表（道具在画面中被看到、使用或特写时绑定），可以为空；必须从 props 中选择
 - scene_id：若可匹配到 scenes 中已有场景，必须填写正确 scene_id；无匹配时置空
-- duration：段落总时长 8-15 秒
+- duration：通用模式段落总时长 8-15 秒；如果用户消息指定了 sd-2.5 系列专用模式，必须优先服从该模式，将每段固定为 30 秒，并遵守其参考素材上限（图片 30、视频 10、音频 10）
 - description：画面描述，按【镜头1】【镜头2】…逐子镜头描述观众实际看到和听到的内容——画面（谁+具体动作+肢体细节+表情）写在前；该子镜头有台词时以「角色名说：「台词」」写在对应【镜头N】内，旁白写「旁白：内容」
 - atmosphere：氛围、光线、色调、环境感受
 - video_prompt：该段落的视频生成提示词（规则见下）
@@ -212,7 +212,17 @@ function createThinkingOffFetch(providerName: string, baseURL: string): typeof f
         }
       }
     } catch { /* 解析失败则原样透传 */ }
-    return fetch(input, init)
+    const response = await fetch(input, init)
+    // AI SDK normally replaces provider errors with a generic message. Keep
+    // the Eggfans response body so the Agent route and UI can identify the
+    // real upstream failure (bad model/parameter/auth) instead of showing a
+    // misleading "service returned an error" toast.
+    if (!response.ok && providerName === 'eggfans') {
+      let detail = ''
+      try { detail = (await response.clone().text()).slice(0, 1200) } catch {}
+      throw new Error(`Eggfans API ${response.status}${detail ? `: ${detail}` : ''}`)
+    }
+    return response
   }
 }
 

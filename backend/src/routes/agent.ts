@@ -101,9 +101,10 @@ app.post('/:type/chat', async (c) => {
     })
   } catch (err: any) {
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1)
-    logTaskError('Agent', agentType, { elapsedSeconds: elapsed, error: err.message })
+    const errorMessage = String(err?.message || err || 'Agent execution failed')
+    logTaskError('Agent', agentType, { elapsedSeconds: elapsed, error: errorMessage })
     console.error(err.stack || err)
-    return badRequest(c, err.message || 'Agent 执行失败')
+    return badRequest(c, errorMessage)
   }
 })
 

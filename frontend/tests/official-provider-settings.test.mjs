@@ -49,7 +49,7 @@ test('settings page offers official default model IDs', () => {
   assert.match(settingsPage, /gemini-3-flash-preview/)
   assert.match(settingsPage, /gpt-5\.6-terra/)
   assert.match(settingsPage, /deepseek-v4-flash/)
-  assert.match(settingsPage, /gemini-3-pro-image/)
+  assert.match(settingsPage, /gemini-3\.1-flash-lite-image/)
   assert.match(settingsPage, /gemini-3\.1-flash-image/)
   assert.match(settingsPage, /gpt-image-2/)
   assert.match(settingsPage, /doubao-seedance-2-0-260128/)

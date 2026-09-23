@@ -10,8 +10,22 @@ import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 
 const SEEN_KEY = 'huobao:tours'
+const SEEN_COOKIE = 'huobao_tours'
 
 function readSeen(): string[] {
+  // The desktop backend uses a dynamic localhost port. localStorage is
+  // origin-scoped (and therefore port-scoped), so it was reset on every app
+  // launch. Cookies are scoped to the host, not the port, and persist across
+  // those restarts; keep localStorage as a fallback for normal browser use.
+  try {
+    const cookie = document.cookie
+      .split('; ')
+      .find(entry => entry.startsWith(`${SEEN_COOKIE}=`))
+    if (cookie) {
+      const parsed = JSON.parse(decodeURIComponent(cookie.slice(SEEN_COOKIE.length + 1)))
+      if (Array.isArray(parsed)) return parsed.filter(item => typeof item === 'string')
+    }
+  } catch { /* fall through to localStorage */ }
   try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]') } catch { return [] }
 }
 
@@ -23,7 +37,11 @@ export function markTourSeen(id: string) {
   const seen = readSeen()
   if (!seen.includes(id)) {
     seen.push(id)
-    localStorage.setItem(SEEN_KEY, JSON.stringify(seen))
+    const value = JSON.stringify(seen)
+    try { localStorage.setItem(SEEN_KEY, value) } catch { /* 静默 */ }
+    try {
+      document.cookie = `${SEEN_COOKIE}=${encodeURIComponent(value)}; path=/; max-age=31536000; SameSite=Lax`
+    } catch { /* 静默 */ }
   }
 }
 
@@ -70,5 +88,10 @@ export function startTour(id: string, steps: TourStep[], t: (key: string) => str
 /** 首次进入自动引导：看过或元素未就绪则跳过 */
 export function autoTour(id: string, steps: TourStep[], t: (key: string) => string) {
   if (tourSeen(id)) return
+  const usable = steps.some(s => s.element === '#__nuxt' || document.querySelector(s.element))
+  if (!usable) return
+  // Record before opening so closing the first popover (or navigating away)
+  // cannot cause it to reappear on the next launch.
+  markTourSeen(id)
   startTour(id, steps, t)
 }

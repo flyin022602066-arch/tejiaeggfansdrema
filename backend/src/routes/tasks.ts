@@ -5,7 +5,10 @@ import { success, created, badRequest } from '../utils/response.js'
 import { generateImage, generateVideo } from '../services/generation.js'
 import { getActiveConfig, getConfigById } from '../services/ai.js'
 import { getDramaStylePrompt } from '../services/style-preset.js'
+import { composeVideoGenerationPrompt } from '../services/prompt-style.js'
 import { logTaskError, logTaskPayload, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+import { isGrokModel, validateEggfansStandardVideoInput } from '../services/adapters/eggfans-video.js'
+import { isVideoAssetReferenceMode } from '../services/video-reference-mode.js'
 
 const app = new Hono()
 
@@ -20,6 +23,14 @@ const WAN_MEDIA_TYPES = new Set([
   'file',
   'link',
 ])
+
+// Local assets are valid inside the desktop app but cannot be dereferenced by
+// Eggfans. They are removed later by the generation normalizer when no public
+// base URL is configured; they must not cause an immediate client-side 400.
+function isLocalAssetUrl(value: unknown): boolean {
+  const url = String(value || '').trim()
+  return url.startsWith('static/') || url.startsWith('/static/')
+}
 
 /**
  * 兼容项目原有扁平入参，也支持 Wan 3.0 官方 model/input/parameters 结构。
@@ -52,11 +63,12 @@ function normalizeVideoRequest(body: any) {
     seed: body.seed ?? parameters.seed,
     prompt_extend: body.prompt_extend ?? parameters.prompt_extend,
     watermark: body.watermark ?? parameters.watermark,
+    asset_reference_mode: body.asset_reference_mode ?? parameters.asset_reference_mode ?? 'uri',
     official_media: media,
   }
 }
 
-function validateVideoRequest(body: any, provider?: string): string | null {
+function validateVideoRequest(body: any, provider?: string, model?: string): string | null {
   for (const key of ['reference_image_urls', 'reference_video_urls', 'reference_audio_urls']) {
     if (body[key] !== undefined && !Array.isArray(body[key])) return `${key} 必须为数组`
     if (Array.isArray(body[key]) && body[key].some((url: any) => typeof url !== 'string' || !url.trim())) {
@@ -85,7 +97,8 @@ function validateVideoRequest(body: any, provider?: string): string | null {
   const file = Boolean(body.file_url)
   const link = Boolean(body.link_url)
 
-  if ((provider || '').toLowerCase() === 'aliyun') {
+  const normalizedProvider = (provider || '').toLowerCase()
+  if (normalizedProvider === 'aliyun') {
     if (imgs > 10 || vids > 5 || auds > 5) return 'Wan 3.0 参考素材超限：图片≤10、视频≤5、音频≤5'
     if (last && !first) return 'Wan 3.0 尾帧必须与首帧同时传入'
     if (file && link) return 'Wan 3.0 file 与 link 不能同时传入'
@@ -94,6 +107,20 @@ function validateVideoRequest(body: any, provider?: string): string | null {
     }
     const total = imgs + vids + auds + Number(first) + Number(last) + Number(file) + Number(link)
     if (total > 20) return 'Wan 3.0 input.media 最多 20 项'
+  } else if (normalizedProvider === 'eggfans' && !isGrokModel(model || '')) {
+    const error = validateEggfansStandardVideoInput({
+      model: model || '',
+      duration: body.duration,
+      resolution: body.resolution,
+      imageRefs: body.reference_image_urls.map((url: string) => isLocalAssetUrl(url) ? 'https://uguu.local/reference' : url),
+      videoRefs: body.reference_video_urls.map((url: string) => isLocalAssetUrl(url) ? 'https://uguu.local/reference' : url),
+      audioRefs: body.reference_audio_urls.map((url: string) => isLocalAssetUrl(url) ? 'https://uguu.local/reference' : url),
+      firstImage: isLocalAssetUrl(body.first_frame_url || body.image_url) ? 'https://uguu.local/reference' : (body.first_frame_url || body.image_url),
+      lastImage: isLocalAssetUrl(body.last_frame_url) ? 'https://uguu.local/reference' : body.last_frame_url,
+      fileUrl: body.file_url,
+      linkUrl: body.link_url,
+    })
+    if (error) return error
   } else {
     if (imgs > 9 || vids > 3 || auds > 3) return '参考素材超限：图片≤9、视频≤3、音频≤3'
     if (auds > 0 && imgs + vids === 0) return '参考音频需要至少 1 个参考图片或视频'
@@ -116,6 +143,9 @@ app.post('/', async (c) => {
   }
 
   const videoBody = type === 'video' ? normalizeVideoRequest(body) : null
+  if (videoBody && !isVideoAssetReferenceMode(videoBody.asset_reference_mode)) {
+    return badRequest(c, 'asset_reference_mode must be uri or url')
+  }
 
   try {
     // 请求显式指定 config_id（工作台模型下拉跨厂商切换）时优先；
@@ -138,7 +168,8 @@ app.post('/', async (c) => {
       const effectiveConfig = configId
         ? (await getConfigById(configId)) ?? await getActiveConfig('video')
         : await getActiveConfig('video')
-      const validationError = validateVideoRequest(videoBody, effectiveConfig?.provider)
+      const effectiveModel = videoBody.model || effectiveConfig?.model || ''
+      const validationError = validateVideoRequest(videoBody, effectiveConfig?.provider, effectiveModel)
       if (validationError) return badRequest(c, validationError)
     }
 
@@ -153,10 +184,10 @@ app.post('/', async (c) => {
 
     // 视频生成时把项目视觉风格词注入提示词最前方（与图片侧的自动注入保持一致口径）
     let videoPrompt = videoBody?.prompt
-    if (type === 'video' && String(videoPrompt || '').trim()) {
+    if (type === 'video') {
       const dramaId = body.drama_id ?? storyboardDramaId ?? null
       const stylePrompt = await getDramaStylePrompt(dramaId)
-      if (stylePrompt) videoPrompt = `${stylePrompt}，\n${videoPrompt}`
+      videoPrompt = composeVideoGenerationPrompt(stylePrompt, String(videoPrompt || ''))
     }
 
     const id = type === 'image'
@@ -168,6 +199,11 @@ app.post('/', async (c) => {
         prompt: body.prompt,
         model: body.model,
         size: body.size,
+        quality: body.quality,
+        moderation: body.moderation,
+        format: body.format,
+        responseFormat: body.response_format,
+        n: body.n,
         referenceImages: body.reference_images,
         frameType: body.frame_type,
         configId,
@@ -193,6 +229,7 @@ app.post('/', async (c) => {
         seed: videoBody!.seed,
         promptExtend: videoBody!.prompt_extend,
         watermark: videoBody!.watermark,
+        assetReferenceMode: videoBody!.asset_reference_mode,
         configId,
       })
 

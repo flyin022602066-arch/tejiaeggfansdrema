@@ -1,16 +1,25 @@
 import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
-import { success, created, badRequest, now } from '../utils/response.js'
+import { success, created, badRequest, notFound, now } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
 import { generateImage } from '../services/generation.js'
 import { getDramaStylePrompt } from '../services/style-preset.js'
+import { composeAssetGenerationPrompt } from '../services/prompt-style.js'
 import { ensurePropFinalPrompt } from '../services/final-prompt.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
 // 道具图：白底单品静物，方形画布
-const PROP_IMAGE_SIZE = '1024x1024'
+const PROP_IMAGE_SIZE = '3840x2160'
+
+// GET /props/:id - refresh one asset card without reloading the workbench
+app.get('/:id', async (c) => {
+  const id = Number(c.req.param('id'))
+  const [row] = await db.select().from(schema.props).where(eq(schema.props.id, id))
+  if (!row || row.deletedAt) return notFound(c)
+  return success(c, toSnakeCase(row))
+})
 
 // POST /props — 手动新增道具（传入 episode_id 时关联到该集）
 app.post('/', async (c) => {
@@ -56,6 +65,8 @@ app.put('/:id', async (c) => {
   // 用户上传道具图：直接写入图片地址与本地路径
   if (body.image_url !== undefined) updates.imageUrl = body.image_url
   else if (body.imageUrl !== undefined) updates.imageUrl = body.imageUrl
+  if (body.public_url !== undefined) updates.publicUrl = body.public_url
+  else if (body.publicUrl !== undefined) updates.publicUrl = body.publicUrl
   if (body.local_path !== undefined) updates.localPath = body.local_path
   else if (body.localPath !== undefined) updates.localPath = body.localPath
   // 手动编辑最终提示词时以传入值为准；未传入则保留原值（修改信息时不再自动置空）
@@ -113,10 +124,13 @@ app.post('/:id/generate-image', async (c) => {
 
   const stylePrompt = await getDramaStylePrompt(prop.dramaId)
   const finalPrompt = await ensurePropFinalPrompt(prop, ep.id, false, { model: body.text_model, configId: body.text_config_id ?? undefined })
-  const prompt = finalPrompt || propImagePrompt(prop, stylePrompt)
+  const prompt = [
+    composeAssetGenerationPrompt(stylePrompt, finalPrompt || propImagePrompt(prop), 'prop'),
+    body.prompt_suffix,
+  ].filter(Boolean).join(', ')
   try {
     logTaskStart('PropImage', 'generate', { propId: id, episodeId: ep.id, dramaId: prop.dramaId })
-    const genId = await generateImage({ propId: id, dramaId: prop.dramaId, prompt, model: body.model, size: PROP_IMAGE_SIZE, configId: body.config_id ?? ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ propId: id, dramaId: prop.dramaId, prompt, model: body.model, size: body.size || PROP_IMAGE_SIZE, quality: body.quality, moderation: body.moderation, format: body.format, responseFormat: body.response_format, n: body.n, configId: body.config_id ?? ep.imageConfigId ?? undefined })
     logTaskSuccess('PropImage', 'generate', { propId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

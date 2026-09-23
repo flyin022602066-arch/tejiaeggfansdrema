@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "火宝ショートドラマ",
+    "title": "Eggfansショートドラマ",
     "updateAvailable": "新バージョン v{version} があります。「設定 → 更新について」でアップグレードできます"
   },
   "common": {
@@ -268,11 +268,11 @@
     "ai": {
       "title": "AI サービス設定",
       "desc": "まず推奨テンプレートで設定を作成し、サービスタイプごとに微調整します。ワークベンチで話を作成する際に選択した画像・動画能力がロックされます。",
-      "quickTitle": "火宝クイック設定",
+      "quickTitle": "Eggfansクイック設定",
       "recommended": "おすすめ",
-      "quickDesc": "Huobao API Key を入力すると、テキスト・画像・動画の 3 つの推奨設定を一括で書き込みます。",
-      "getKey": "api.firemux.com で Key を取得",
-      "applyQuick": "火宝設定を書き込む",
+      "quickDesc": "Eggfans API Key を入力すると、テキスト・画像・動画の 3 つの推奨設定を一括で書き込みます。",
+      "getKey": "api.eggfans.com で Key を取得",
+      "applyQuick": "Eggfans設定を書き込む",
       "manualTitle": "手動テンプレート",
       "manualDesc": "サービスタイプを選ぶと、推奨の `provider / base URL / model` がテンプレートから入力されます。",
       "activeCount": "{n} 件有効",
@@ -282,14 +282,34 @@
       "setDefault": "このタイプのデフォルトモデルに設定",
       "noBaseUrl": "Base URL 未設定",
       "test": "テスト",
-      "apiKeyRequired": "Huobao API Key を入力してください",
-      "quickApplied": "火宝クイック設定を書き込みました",
+      "apiKeyRequired": "Eggfans API Key を入力してください",
+      "quickApplied": "Eggfansクイック設定を書き込みました",
       "defaultModelSwitched": "デフォルト{type}モデルを {model} に切り替えました",
       "meta": {
         "text": "脚本リライト、キャラクター・シーン抽出、分镜分解などの Agent テキスト能力",
         "image": "キャラクター図、シーン図、ショット図などの静止画生成",
         "video": "ショット動画の直接生成（デフォルト Seedance 2.0）"
-      }
+      },
+      "imageHostTitle": "Eggfans 画像ホスト（予備）",
+      "imageHostDesc": "アセットはまず Uguu にアップロードし、失敗時は Eggfans 画像ホストを使用します。キーはローカルバックエンドに保存されます。",
+      "imageHostConfigured": "設定済み",
+      "imageHostNotConfigured": "未設定",
+      "imageHostDocs": "Eggfans 画像ホストの説明",
+      "imageHostKeyPlaceholder": "Eggfans 画像ホストキー",
+      "imageHostKeyRequired": "先に Eggfans 画像ホストキーを入力してください",
+      "imageHostSaved": "Eggfans 画像ホストキーを保存しました",
+      "imageHostCleared": "Eggfans 画像ホストキーを削除しました",
+      "virtualAssetTitle": "SD 仮想アセットライブラリ",
+      "virtualAssetDesc": "キャラクターアセット URI をプロジェクト単位で作成し、SD 動画モデルに渡します。キーはローカルバックエンドのみに保存されます。",
+      "virtualAssetConfigured": "設定済み",
+      "virtualAssetNotConfigured": "未設定",
+      "virtualAssetService": "Mijing 仮想アセットサービス",
+      "virtualAssetDocs": "仮想アセット API ドキュメント",
+      "virtualAssetKeyPlaceholder": "仮想アセット API キー",
+      "virtualAssetKeyRequired": "仮想アセット API キーを入力してください",
+      "virtualAssetSaved": "仮想アセット API キーを保存しました",
+      "virtualAssetCleared": "仮想アセット API キーを削除しました",
+      "virtualAssetClear": "削除"
     },
     "styles": {
       "title": "スタイルプリセット",
@@ -387,7 +407,7 @@
       "addTitle": "{type}サービスを追加",
       "sub": "まずテンプレートを選ぶと、適切な `Base URL` とデフォルトモデルが自動入力されます。",
       "name": "設定名",
-      "namePlaceholder": "例：火宝デフォルト画像サービス",
+      "namePlaceholder": "例：Eggfansデフォルト画像サービス",
       "provider": "プロバイダー",
       "providerPlaceholder": "プロバイダーを選択",
       "priority": "優先度",
@@ -450,7 +470,8 @@
       "viewFilm": "完成映像を見る",
       "continue": "制作を続ける",
       "start": "制作を開始",
-      "resolution": "解像度"
+      "resolution": "解像度",
+      "aspectRatio": "比率"
     },
     "model": {
       "defaultWith": "デフォルト · {model}",
@@ -543,6 +564,22 @@
       "uploadSceneImage": "シーン図をアップロード",
       "uploadPropImage": "小道具図をアップロード",
       "uploadImage": "画像をアップロード",
+      "publicUrl": "画像ホスト URL",
+      "publicUrlReady": "アップロード済み",
+      "publicUrlMissing": "未アップロード",
+      "publicUrlRetryHint": "画像ホストへのアップロードに失敗しました。手動で再試行できます。",
+      "publicUrlImageFirst": "先にアセット画像をアップロードまたは生成してください",
+      "uploadPublic": "画像ホストへ",
+      "uploadingPublic": "アップロード中",
+      "publicUploadDone": "画像ホスト URL を更新しました",
+      "publicUploadFailed": "画像ホストへのアップロードに失敗しました",
+      "virtualAssetUri": "仮想アセット URI",
+      "virtualAssetMissing": "未作成",
+      "virtualAssetReady": "準備完了",
+      "virtualAssetCreate": "URI を作成 / 更新",
+      "virtualAssetCreating": "作成中",
+      "virtualAssetDone": "キャラクターの仮想アセット URI が準備できました",
+      "virtualAssetFailed": "キャラクター仮想アセットの作成に失敗しました",
       "appearance": "外見：",
       "styling": "スタイリング：",
       "lighting": "光照 · ",
@@ -740,6 +777,7 @@
       "allDone": "すべてのショット動画が生成済みです",
       "moderationHint": "実写人物/センシティブ内容の審査で拒否された可能性があります。上部バーで別の動画モデルに切り替えて再試行してください",
       "resolutionSwitched": "このエピソードの動画解像度を {label} に変更しました",
+      "aspectRatioSwitched": "動画の共通比率を {ratio} に変更しました",
       "noneToGenerate": "生成するショットがありません",
       "batchStarted": "{n} 件の動画生成タスクを開始しました",
       "retryFailed": "失敗を再試行({n})",
@@ -758,7 +796,13 @@
       "confirmNote": "上記の設定でショットごとに生成を開始します。失敗したタスクは後で「失敗を再試行」からまとめて再実行できます。",
       "confirmStart": "生成開始 ({n})",
       "selectMissing": "未生成を選択",
-      "aspectRatio": "アスペクト比"
+      "aspectRatio": "アスペクト比",
+      "referenceMode": "素材転送",
+      "referenceModeUri": "URI 素材",
+      "referenceModeUrl": "URL 直接",
+      "referenceModeUriHint": "Uguu の公開 URL から仮想素材を作成し、asset URI を sd 動画モデルへ送信します",
+      "referenceModeUrlHint": "仮想素材を使用せず、Uguu または予備画像ホストの URL を sd 動画モデルへ直接送信します",
+      "referenceModeSwitched": "素材転送を {mode} に切り替えました"
     },
     "inspector": {
       "videoPromptPlaceholder": "{'@'}キャラクター名 / {'@'}シーン名 で参照素材を指定（生成時に参照画像へ自動マッピング）。時間帯ごとに画面の動きとカメラを記述…",
@@ -816,6 +860,23 @@
       "unmarkDoneToast": "完了マークを解除しました"
     },
     "image": {
+      "params": "生成パラメータ",
+      "paramsTitle": "アセット画像生成パラメータ",
+      "paramsSubtitle": "キャラクター・シーン・小道具の単体および一括生成に使用",
+      "model": "現在のモデル",
+      "size": "画像サイズ",
+      "count": "アセットごとの枚数",
+      "quality": "品質",
+      "moderation": "審査レベル",
+      "format": "画像形式",
+      "responseFormat": "レスポンス形式",
+      "promptSuffix": "プロンプト追記",
+      "promptSuffixPlaceholder": "任意。各アセットのプロンプト末尾に追加します",
+      "paramsNote": "各アセット固有のプロンプトは維持されます。n は 1-10、最初の画像をメイン画像として使用します。設定はローカル保存されます。",
+      "resetParams": "初期値に戻す",
+      "paramsSaved": "画像生成パラメータを保存しました",
+      "generationFailed": "アセット画像の生成に失敗しました",
+      "waitTimeout": "画像生成がタイムアウトしました。タスク一覧を確認してください。",
       "generatingChar": "キャラクター画像を生成中",
       "generatingScene": "シーン画像を生成中",
       "generatingProp": "小道具画像を生成中",
@@ -832,6 +893,8 @@
     },
     "upload": {
       "assetDone": "{type}をアップロードしました",
+      "assetDoneWithPublicUrl": "{type}をアップロードし、公開 URL を取得しました",
+      "assetDonePublicFailed": "画像は保存されましたが、画像ホストへのアップロードに失敗しました: {error}",
       "refImageFull": "参照画像は上限に達しました（シーン/キャラクター素材を含む）",
       "refImageDone": "参照画像をアップロードしました",
       "refMax3": "参照{type}は最大 3 つまで",
@@ -875,7 +938,7 @@
     "helpTitle": "ガイド",
     "index": {
       "welcome": {
-        "title": "👋 火宝短劇へようこそ",
+        "title": "👋 Eggfans短劇へようこそ",
         "desc": "小説 → 脚本 → アセット → 絵コンテ → 動画 → 完成、すべてワンストップ。まず AI サービスを設定し、最初のプロジェクトを作成しましょう。"
       },
       "create": {
@@ -884,13 +947,13 @@
       },
       "settings": {
         "title": "ステップ 1 · AI サービスを設定",
-        "desc": "すべての AI 機能に事前設定が必要です。「設定」ページで Huobao API キーを貼り、テキスト/画像/動画をワンクリック設定しましょう。"
+        "desc": "すべての AI 機能に事前設定が必要です。「設定」ページで Eggfans API キーを貼り、テキスト/画像/動画をワンクリック設定しましょう。"
       }
     },
     "settings": {
       "quick": {
         "title": "最速セットアップ：クイック設定",
-        "desc": "Huobao API キーを貼り付けると推奨 3 設定（テキスト/画像/動画）を一括書き込み。接続テスト対応。"
+        "desc": "Eggfans API キーを貼り付けると推奨 3 設定（テキスト/画像/動画）を一括書き込み。接続テスト対応。"
       },
       "nav": {
         "title": "すべてここに",

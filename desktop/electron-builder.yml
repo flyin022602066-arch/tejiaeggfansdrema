@@ -1,5 +1,5 @@
 appId: com.huobao.drama
-productName: HuobaoDrama
+productName: Eggfans
 directories:
   output: release
   buildResources: build
@@ -47,4 +47,4 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
-  shortcutName: HuobaoDrama
+  shortcutName: Eggfans

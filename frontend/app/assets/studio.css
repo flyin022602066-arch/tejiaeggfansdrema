@@ -240,7 +240,16 @@
   --accent-purple-bg: rgba(129,140,248,0.16);
 }
 
-html, body, #__nuxt { height: 100%; }
+/* The application owns scrolling inside each page (for example
+ * .settings-scroll).  Keeping the document root non-scrollable prevents a
+ * long child from moving the whole app shell upward, which otherwise leaves
+ * an unpainted/background strip visible after maximizing the Electron window.
+ */
+html, body, #__nuxt {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
 
 body {
   font-family: var(--font-body);

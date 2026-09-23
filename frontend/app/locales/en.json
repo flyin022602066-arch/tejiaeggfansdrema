@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Huobao Shorts",
+    "title": "Eggfans Shorts",
     "updateAvailable": "New version v{version} is available. Upgrade in Settings → About."
   },
   "common": {
@@ -268,11 +268,11 @@
     "ai": {
       "title": "AI Service Configs",
       "desc": "Start with a recommended template, then fine-tune per service type. The workbench locks the chosen image and video capabilities when creating an episode.",
-      "quickTitle": "Huobao Quick Config",
+      "quickTitle": "Eggfans Quick Config",
       "recommended": "Recommended",
-      "quickDesc": "Enter a Huobao API Key to write three recommended configs (text, image, video) at once.",
-      "getKey": "Get a key at api.firemux.com",
-      "applyQuick": "Apply Huobao Config",
+      "quickDesc": "Enter a Eggfans API Key to write three recommended configs (text, image, video) at once.",
+      "getKey": "Get a key at api.eggfans.com",
+      "applyQuick": "Apply Eggfans Config",
       "manualTitle": "Manual Templates",
       "manualDesc": "Pick a service type, then fill the recommended `provider / base URL / model` from a template.",
       "activeCount": "{n} active",
@@ -282,14 +282,34 @@
       "setDefault": "Set as default model for this type",
       "noBaseUrl": "Base URL not set",
       "test": "Test",
-      "apiKeyRequired": "Please enter a Huobao API Key",
-      "quickApplied": "Huobao quick config written",
+      "apiKeyRequired": "Please enter a Eggfans API Key",
+      "quickApplied": "Eggfans quick config written",
       "defaultModelSwitched": "Default {type} model switched to {model}",
       "meta": {
         "text": "Text capabilities: script rewriting, asset extraction, storyboard breaking",
         "image": "Static image generation: characters, scenes and shots",
         "video": "Direct video generation, Seedance 2.0 by default"
-      }
+      },
+      "imageHostTitle": "Eggfans fallback image host",
+      "imageHostDesc": "Assets use Uguu first, then Eggfans image host on failure. The key stays in the local backend.",
+      "imageHostConfigured": "Configured",
+      "imageHostNotConfigured": "Not configured",
+      "imageHostDocs": "View Eggfans image-host docs",
+      "imageHostKeyPlaceholder": "Enter Eggfans image-host key",
+      "imageHostKeyRequired": "Enter an Eggfans image-host key first",
+      "imageHostSaved": "Eggfans image-host key saved",
+      "imageHostCleared": "Eggfans image-host key cleared",
+      "virtualAssetTitle": "SD virtual asset library",
+      "virtualAssetDesc": "Creates project-scoped character asset URIs and passes them to SD video models. The key stays in the local backend.",
+      "virtualAssetConfigured": "Configured",
+      "virtualAssetNotConfigured": "Not configured",
+      "virtualAssetService": "Mijing virtual asset service",
+      "virtualAssetDocs": "View virtual asset API docs",
+      "virtualAssetKeyPlaceholder": "Enter virtual asset API key",
+      "virtualAssetKeyRequired": "Enter a virtual asset API key first",
+      "virtualAssetSaved": "Virtual asset API key saved",
+      "virtualAssetCleared": "Virtual asset API key cleared",
+      "virtualAssetClear": "Clear"
     },
     "styles": {
       "title": "Style Presets",
@@ -387,7 +407,7 @@
       "addTitle": "Add {type} Service",
       "sub": "Pick a template first — a sensible `Base URL` and default models will be filled in automatically.",
       "name": "Config name",
-      "namePlaceholder": "e.g. Huobao default image service",
+      "namePlaceholder": "e.g. Eggfans default image service",
       "provider": "Provider",
       "providerPlaceholder": "Select a provider",
       "priority": "Priority",
@@ -450,7 +470,8 @@
       "viewFilm": "View Film",
       "continue": "Continue",
       "start": "Start Production",
-      "resolution": "Resolution"
+      "resolution": "Resolution",
+      "aspectRatio": "Ratio"
     },
     "model": {
       "defaultWith": "Default · {model}",
@@ -543,6 +564,22 @@
       "uploadSceneImage": "Upload scene image",
       "uploadPropImage": "Upload prop image",
       "uploadImage": "Upload image",
+      "publicUrl": "Image-host URL",
+      "publicUrlReady": "Uploaded",
+      "publicUrlMissing": "Not uploaded",
+      "publicUrlRetryHint": "Image-host upload failed. You can retry manually.",
+      "publicUrlImageFirst": "Upload or generate an asset image first",
+      "uploadPublic": "Upload to host",
+      "uploadingPublic": "Uploading",
+      "publicUploadDone": "Image-host URL updated",
+      "publicUploadFailed": "Image-host upload failed",
+      "virtualAssetUri": "Virtual asset URI",
+      "virtualAssetMissing": "Not created",
+      "virtualAssetReady": "Ready",
+      "virtualAssetCreate": "Create / refresh URI",
+      "virtualAssetCreating": "Creating",
+      "virtualAssetDone": "Character virtual asset URI is ready",
+      "virtualAssetFailed": "Failed to create character virtual asset",
       "appearance": "Appearance: ",
       "styling": "Styling: ",
       "lighting": "Lighting · ",
@@ -740,6 +777,7 @@
       "allDone": "All shot videos generated",
       "moderationHint": "Looks like a real-person/sensitive content moderation rejection — switch video model in the top bar and retry",
       "resolutionSwitched": "Episode video resolution switched to {label}",
+      "aspectRatioSwitched": "Global video ratio switched to {ratio}",
       "noneToGenerate": "No shots to generate",
       "batchStarted": "Started {n} video generation tasks",
       "retryFailed": "Retry failed ({n})",
@@ -758,7 +796,13 @@
       "confirmNote": "Generation will start shot by shot with the above config; failed tasks can be retried later via \"Retry failed\".",
       "confirmStart": "Start ({n})",
       "selectMissing": "Select without video",
-      "aspectRatio": "Aspect Ratio"
+      "aspectRatio": "Aspect Ratio",
+      "referenceMode": "Asset transfer",
+      "referenceModeUri": "Asset URI",
+      "referenceModeUrl": "Direct URL",
+      "referenceModeUriHint": "Create a virtual asset from the Uguu public URL, then send its asset URI to the sd video model",
+      "referenceModeUrlHint": "Skip virtual assets and send the Uguu or fallback image-host URL directly to the sd video model",
+      "referenceModeSwitched": "Asset transfer switched to {mode}"
     },
     "inspector": {
       "videoPromptPlaceholder": "Reference assets with {'@'}character / {'@'}scene — auto-mapped to reference images on generation; then describe motion and camera per time segment…",
@@ -816,6 +860,23 @@
       "unmarkDoneToast": "Done mark removed"
     },
     "image": {
+      "params": "Parameters",
+      "paramsTitle": "Asset image parameters",
+      "paramsSubtitle": "Used for individual and batch character, scene, and prop generation",
+      "model": "Current model",
+      "size": "Image size",
+      "count": "Images per asset",
+      "quality": "Quality",
+      "moderation": "Moderation",
+      "format": "Image format",
+      "responseFormat": "Response format",
+      "promptSuffix": "Prompt suffix",
+      "promptSuffixPlaceholder": "Optional text appended to each asset prompt",
+      "paramsNote": "Each asset keeps its own prompt. n accepts 1-10; the first returned image becomes the asset cover. Settings are stored locally.",
+      "resetParams": "Reset defaults",
+      "paramsSaved": "Asset image parameters saved",
+      "generationFailed": "Asset image generation failed",
+      "waitTimeout": "Image generation timed out. Check the task list for status.",
       "generatingChar": "Character image generating",
       "generatingScene": "Scene image generating",
       "generatingProp": "Prop image generating",
@@ -832,6 +893,8 @@
     },
     "upload": {
       "assetDone": "{type} uploaded",
+      "assetDoneWithPublicUrl": "{type} uploaded and public URL is ready",
+      "assetDonePublicFailed": "Image saved, but image-host upload failed: {error}. Retry from the asset card.",
       "refImageFull": "Reference image limit reached (including scene/character assets)",
       "refImageDone": "Reference image uploaded",
       "refMax3": "At most 3 reference {type}",
@@ -875,7 +938,7 @@
     "helpTitle": "Guide",
     "index": {
       "welcome": {
-        "title": "👋 Welcome to Huobao Drama",
+        "title": "👋 Welcome to Eggfans Drama",
         "desc": "Novel → script → assets → storyboard → video → final cut, all in one place. Configure AI services first, then create your first project."
       },
       "create": {
@@ -884,13 +947,13 @@
       },
       "settings": {
         "title": "Step 1 · Configure AI services",
-        "desc": "Every AI feature needs this first. Open Settings and paste a Huobao API Key to set up text/image/video in one click."
+        "desc": "Every AI feature needs this first. Open Settings and paste a Eggfans API Key to set up text/image/video in one click."
       }
     },
     "settings": {
       "quick": {
         "title": "Fastest setup: Quick Setup",
-        "desc": "Paste a Huobao API Key to write the three recommended configs (text/image/video) at once, with connectivity testing."
+        "desc": "Paste a Eggfans API Key to write the three recommended configs (text/image/video) at once, with connectivity testing."
       },
       "nav": {
         "title": "Everything lives here",

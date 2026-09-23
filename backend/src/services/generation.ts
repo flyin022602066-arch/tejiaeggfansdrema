@@ -10,9 +10,22 @@ import { downloadFile, fetchImageAsCompressedDataUrl, generateImageThumb, readIm
 import { extractVideoPoster } from '../utils/video-poster.js'
 import { getImageAdapter, getVideoAdapter } from './adapters/registry'
 import type { AIConfig } from './adapters/types'
+import { isGrokModel } from './adapters/eggfans-video.js'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
+import { isPublicHttpUrl } from './uguu.js'
+import { uploadFileToImageHost } from './image-host.js'
+import { mapStoryboardCharacterReferencesToUris } from './virtual-assets.js'
+import {
+  normalizeVideoAssetReferenceMode,
+  resolveSdReferenceImages,
+  type VideoAssetReferenceMode,
+} from './video-reference-mode.js'
 
 type TaskType = 'image' | 'video'
+
+export const ASSET_IMAGE_SIZE = '3840x2160'
+export const ASSET_IMAGE_QUALITY = 'high'
+export const ASSET_IMAGE_MODERATION = 'low'
 
 const taskLabel = (type: TaskType) => (type === 'image' ? 'ImageTask' : 'VideoTask')
 
@@ -31,6 +44,11 @@ interface GenerateImageParams {
   prompt: string
   model?: string
   size?: string
+  quality?: string
+  moderation?: string
+  format?: string
+  responseFormat?: string
+  n?: number
   referenceImages?: string[]
   frameType?: string
   configId?: number
@@ -57,6 +75,7 @@ interface GenerateVideoParams {
   seed?: number
   promptExtend?: boolean
   watermark?: boolean
+  assetReferenceMode?: VideoAssetReferenceMode
   configId?: number
 }
 
@@ -67,7 +86,9 @@ export async function generateImage(params: GenerateImageParams): Promise<number
     : await getActiveConfig('image')
   if (!config) throw new Error('未配置图片模型，请先到「设置」页添加并启用 AI 服务')
 
-  const selectedModel = params.model || config.model
+  const selectedModel = (params.model || config.model) === 'gemini-3-pro-preview'
+    ? 'gemini-3.1-pro-preview'
+    : (params.model || config.model)
   const taskConfig = selectedModel === config.model ? config : { ...config, model: selectedModel }
 
   const id = await createTask('image', taskConfig, {
@@ -79,7 +100,12 @@ export async function generateImage(params: GenerateImageParams): Promise<number
     prompt: params.prompt,
     model: selectedModel,
   }, {
-    size: params.size || '1920x1080',
+    size: params.size || ASSET_IMAGE_SIZE,
+    quality: params.quality || ASSET_IMAGE_QUALITY,
+    moderation: params.moderation || ASSET_IMAGE_MODERATION,
+    format: params.format,
+    responseFormat: params.responseFormat,
+    n: normalizeImageCount(params.n),
     frameType: params.frameType,
     referenceImages: params.referenceImages,
   })
@@ -134,6 +160,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     seed: params.seed,
     promptExtend: params.promptExtend,
     watermark: params.watermark,
+    assetReferenceMode: normalizeVideoAssetReferenceMode(params.assetReferenceMode),
   })
 
   logTaskStart('VideoTask', 'enqueue', {
@@ -212,26 +239,64 @@ async function processTask(id: number, config: AIConfig) {
     let url: string, method: string, headers: Record<string, string>, body: unknown
 
     if (type === 'image') {
-      const adapter = getImageAdapter(config.provider)
+      const adapter = getImageAdapter(config.provider, record.model || config.model)
       const resolvedReferenceImages = await normalizeReferenceImages(params.referenceImages)
       ;({ url, method, headers, body } = adapter.buildGenerateRequest(config, {
         id: record.id,
         model: record.model,
         prompt: record.prompt,
         size: params.size,
+        quality: params.quality,
+        moderation: params.moderation,
+        format: params.format,
+        responseFormat: params.responseFormat,
+        n: params.n,
         frameType: params.frameType,
         referenceImages: resolvedReferenceImages.length ? JSON.stringify(resolvedReferenceImages) : null,
       }))
     } else {
       const adapter = getVideoAdapter(config.provider)
-      const resolvedImageUrl = await normalizeVideoReferenceUrl(params.imageUrl)
-      const resolvedFirstFrameUrl = await normalizeVideoReferenceUrl(params.firstFrameUrl)
-      const resolvedLastFrameUrl = await normalizeVideoReferenceUrl(params.lastFrameUrl)
-      const resolvedReferenceImageUrls = await normalizeVideoReferenceUrls(params.referenceImageUrls)
+      const isEggfansStandard = config.provider.toLowerCase() === 'eggfans'
+        && !isGrokModel(String(record.model || config.model || ''))
+      const isAutoDL = config.provider.toLowerCase() === 'autodl'
+      const needsPublicHostedMedia = isEggfansStandard || isAutoDL
+      const mediaProviderLabel = isAutoDL ? 'AutoDL MiniMax H3' : String(record.model || config.model || 'Eggfans 标准视频')
+      const resolvedImageUrl = needsPublicHostedMedia
+        ? await normalizePublicHostedMediaUrl(params.imageUrl, '首帧图片', 'image', mediaProviderLabel)
+        : await normalizeVideoReferenceUrl(params.imageUrl)
+      const resolvedFirstFrameUrl = needsPublicHostedMedia
+        ? await normalizePublicHostedMediaUrl(params.firstFrameUrl, '首帧图片', 'image', mediaProviderLabel)
+        : await normalizeVideoReferenceUrl(params.firstFrameUrl)
+      const resolvedLastFrameUrl = needsPublicHostedMedia
+        ? await normalizePublicHostedMediaUrl(params.lastFrameUrl, '尾帧图片', 'image', mediaProviderLabel)
+        : await normalizeVideoReferenceUrl(params.lastFrameUrl)
+      const rawReferenceImageUrls = uniqueMediaValues(params.referenceImageUrls)
+      const isSdSeries = isEggfansStandard && /^sd(?:-|$)/i.test(String(record.model || config.model || ''))
+      const resolvedReferenceImageUrls = isSdSeries
+        ? await resolveSdReferenceImages(
+          params.assetReferenceMode,
+          () => mapStoryboardCharacterReferencesToUris(
+            record.storyboardId,
+            rawReferenceImageUrls,
+            value => normalizePublicHostedMediaUrl(value, '参考图片', 'image', mediaProviderLabel),
+          ),
+          () => normalizePublicHostedMediaUrls(rawReferenceImageUrls, '参考图片', 'image', mediaProviderLabel),
+        )
+        : needsPublicHostedMedia
+          ? await normalizePublicHostedMediaUrls(rawReferenceImageUrls, '参考图片', 'image', mediaProviderLabel)
+          : await normalizeVideoReferenceUrls(rawReferenceImageUrls)
       // 参考视频/音频文件较大，不适合 dataURL 内联，需解析为公网可访问 URL
-      const resolvedReferenceVideoUrls = resolvePublicMediaUrls(params.referenceVideoUrls, 'video')
-      const resolvedReferenceAudioUrls = resolvePublicMediaUrls(params.referenceAudioUrls, 'audio')
-      const resolvedReferenceFileUrl = resolvePublicMediaUrl(params.referenceFileUrl, 'file')
+      const resolvedReferenceVideoUrls = isEggfansStandard
+        ? await normalizePublicHostedMediaUrls(params.referenceVideoUrls, '参考视频', 'video', mediaProviderLabel)
+        : isAutoDL
+          ? uniqueMediaValues(params.referenceVideoUrls)
+        : resolvePublicMediaUrls(params.referenceVideoUrls, 'video')
+      const resolvedReferenceAudioUrls = needsPublicHostedMedia
+        ? await normalizePublicHostedMediaUrls(params.referenceAudioUrls, '参考音频', 'audio', mediaProviderLabel)
+        : resolvePublicMediaUrls(params.referenceAudioUrls, 'audio')
+      const resolvedReferenceFileUrl = isEggfansStandard
+        ? null
+        : resolvePublicMediaUrl(params.referenceFileUrl, 'file')
       ;({ url, method, headers, body } = adapter.buildGenerateRequest(config, {
         id: record.id,
         model: record.model,
@@ -277,12 +342,18 @@ async function processTask(id: number, config: AIConfig) {
       signal: AbortSignal.timeout(600_000),
     })
 
-    if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
-    const result = await resp.json() as any
+    const rawResponse = await resp.text()
+    if (!resp.ok) throw new Error(`API error ${resp.status}: ${rawResponse.slice(0, 1200)}`)
+    let result: any
+    try {
+      result = JSON.parse(rawResponse)
+    } catch {
+      throw new Error(`API returned non-JSON (${resp.status}): ${rawResponse.slice(0, 240)}`)
+    }
     logTaskPayload(label, 'response payload', { id, provider: config.provider, result })
 
     if (type === 'image') {
-      const adapter = getImageAdapter(config.provider)
+      const adapter = getImageAdapter(config.provider, record.model || config.model)
       const { isAsync, taskId, imageUrl } = adapter.parseGenerateResponse(result)
 
       if (!isAsync && imageUrl) {
@@ -343,7 +414,7 @@ async function pollTask(record: SysTaskRecord, config: AIConfig, taskId: string)
   const type = record.type as TaskType
   const label = taskLabel(type)
   const profile = POLL_PROFILES[type]
-  const adapter = type === 'image' ? getImageAdapter(config.provider) : getVideoAdapter(config.provider)
+  const adapter = type === 'image' ? getImageAdapter(config.provider, record.model || config.model) : getVideoAdapter(config.provider)
   const startedAt = Date.now()
 
   for (let i = 0; i < profile.attempts; i++) {
@@ -421,18 +492,24 @@ async function handleImageComplete(record: SysTaskRecord, imageUrl: string) {
   // 列表页缩略图（前端按命名约定推导地址，失败不影响主流程）
   await generateImageThumb(localPath)
 
+  // Make the local result visible immediately. Public image-host upload is a
+  // secondary step and must not delay the asset card or task completion.
+  await writeBackImageAssets(record, localPath, null)
+
   await db.update(schema.sysTask)
     .set({ resultUrl: imageUrl, localPath, status: 'completed', completedAt: now(), updatedAt: now() })
     .where(eq(schema.sysTask.id, record.id))
 
   logTaskSuccess('ImageTask', 'downloaded', { id: record.id, provider: record.provider, localPath })
 
-  await writeBackImageAssets(record, localPath)
+  const publicUrl = await uploadGeneratedAssetToImageHost(record, localPath)
+  if (publicUrl) await writeBackImageAssets(record, localPath, publicUrl)
 }
 
 async function handleImageCompleteBase64(record: SysTaskRecord, base64Data: string, mimeType: string) {
   const localPath = await saveBase64Image(base64Data, mimeType, 'images')
   await generateImageThumb(localPath)
+  await writeBackImageAssets(record, localPath, null)
 
   await db.update(schema.sysTask)
     .set({ localPath, status: 'completed', completedAt: now(), updatedAt: now() })
@@ -440,11 +517,25 @@ async function handleImageCompleteBase64(record: SysTaskRecord, base64Data: stri
 
   logTaskSuccess('ImageTask', 'saved-base64', { id: record.id, provider: record.provider, mimeType, localPath })
 
-  await writeBackImageAssets(record, localPath)
+  const publicUrl = await uploadGeneratedAssetToImageHost(record, localPath)
+  if (publicUrl) await writeBackImageAssets(record, localPath, publicUrl)
+}
+
+async function uploadGeneratedAssetToImageHost(record: SysTaskRecord, localPath: string): Promise<string | null> {
+  if (!record.characterId && !record.sceneId && !record.propId) return null
+  try {
+    const publicUrl = (await uploadFileToImageHost(localPath, 'image/png')).url
+    logTaskSuccess('ImageTask', 'asset-public-uploaded', { id: record.id, publicUrl: redactUrl(publicUrl) })
+    return publicUrl
+  } catch (error) {
+    // A public URL can be retried from the asset UI; keep the generated local image usable.
+    logTaskWarn('ImageTask', 'asset-public-upload-failed', { id: record.id, error: (error as Error).message })
+    return null
+  }
 }
 
 // 图片完成后回写业务表：分镜(按 frameType)、角色、场景、道具
-async function writeBackImageAssets(record: SysTaskRecord, localPath: string) {
+async function writeBackImageAssets(record: SysTaskRecord, localPath: string, publicUrl: string | null = null) {
   const params = parseTaskParams(record.params)
   if (record.storyboardId) {
     const sbUpdate: Record<string, any> = { updatedAt: now() }
@@ -454,13 +545,21 @@ async function writeBackImageAssets(record: SysTaskRecord, localPath: string) {
     await db.update(schema.storyboards).set(sbUpdate).where(eq(schema.storyboards.id, record.storyboardId))
   }
   if (record.characterId) {
-    await db.update(schema.characters).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId))
+    await db.update(schema.characters).set({
+      imageUrl: localPath,
+      publicUrl,
+      virtualAssetId: null,
+      virtualAssetUri: null,
+      virtualAssetSourceUrl: null,
+      virtualAssetStatus: null,
+      updatedAt: now(),
+    }).where(eq(schema.characters.id, record.characterId))
   }
   if (record.sceneId) {
-    await db.update(schema.scenes).set({ imageUrl: localPath, status: 'completed', updatedAt: now() }).where(eq(schema.scenes.id, record.sceneId))
+    await db.update(schema.scenes).set({ imageUrl: localPath, publicUrl, status: 'completed', updatedAt: now() }).where(eq(schema.scenes.id, record.sceneId))
   }
   if (record.propId) {
-    await db.update(schema.props).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.props.id, record.propId))
+    await db.update(schema.props).set({ imageUrl: localPath, publicUrl, updatedAt: now() }).where(eq(schema.props.id, record.propId))
   }
 }
 
@@ -554,6 +653,40 @@ async function normalizeVideoReferenceUrls(refs: string[] | null | undefined): P
     Array.from(new Set(refs.map((item) => String(item || '').trim()).filter(Boolean))).map((item) => normalizeVideoReferenceUrl(item)),
   )
   return normalized.filter((item): item is string => !!item)
+}
+
+function normalizeImageCount(value: unknown): number {
+  const count = Number(value || 1)
+  if (!Number.isFinite(count)) return 1
+  return Math.min(10, Math.max(1, Math.trunc(count)))
+}
+
+async function normalizePublicHostedMediaUrl(value: string | null | undefined, label: string, kind: 'image' | 'video' | 'audio', providerLabel: string): Promise<string | null> {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+
+  // Every Eggfans standard-video reference is normalized through the configured public image host so the provider gets
+  // a stable directly-fetchable URL, including references that started remote.
+  if (isPublicHttpUrl(raw) && /(?:uguu\.se|imageproxy\.zhongzhuan\.chat)/i.test(raw)) return raw
+  try {
+    const mime = kind === 'image' ? 'image/png' : kind === 'video' ? 'video/mp4' : 'audio/mpeg'
+    return (await uploadFileToImageHost(raw, mime)).url
+  } catch (error) {
+    throw new Error(`${providerLabel} ${label}上传公共图床失败：${(error as Error).message}`)
+  }
+}
+
+async function normalizePublicHostedMediaUrls(refs: string[] | null | undefined, label: string, kind: 'image' | 'video' | 'audio', providerLabel: string): Promise<string[]> {
+  if (!Array.isArray(refs) || !refs.length) return []
+  const values = Array.from(new Set(refs.map(item => String(item || '').trim()).filter(Boolean)))
+  const normalized = await Promise.all(values.map(item => normalizePublicHostedMediaUrl(item, label, kind, providerLabel)))
+  return normalized
+    .filter((item): item is string => !!item)
+}
+
+function uniqueMediaValues(refs: string[] | null | undefined): string[] {
+  if (!Array.isArray(refs) || !refs.length) return []
+  return Array.from(new Set(refs.map(item => String(item || '').trim()).filter(Boolean)))
 }
 
 /**

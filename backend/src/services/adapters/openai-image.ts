@@ -21,7 +21,10 @@ export class OpenAIImageAdapter implements ImageProviderAdapter {
   buildGenerateRequest(config: AIConfig, record: ImageGenerationRecord): ProviderRequest {
     const model = record.model || config.model || 'gpt-image-2'
     const isGptImage = model.startsWith('gpt-image-')
-    const isGptImage2 = model === 'gpt-image-2'
+    // GPT Image 2/2.5 variants accept flexible pixel dimensions (up to 4K).
+    // Treating suffixed models as generic GPT Image models silently collapsed
+    // 3840x2160 to the legacy 1536x1024 landscape preset.
+    const isGptImage2 = /^gpt-image-2(?:[.\-]|$)/i.test(model)
     const size = isGptImage2
       ? this.normalizeGptImage2Size(record.size)
       : isGptImage
@@ -31,17 +34,22 @@ export class OpenAIImageAdapter implements ImageProviderAdapter {
     // 有参考图 → 走 edits（multipart 上传图片文件）；无参考图 → 纯文生图 generations
     const refs = this.parseReferenceImages(record.referenceImages)
     if (refs.length) {
-      return this.buildEditsRequest(config, model, record.prompt, size, refs)
+      return this.buildEditsRequest(config, model, record.prompt, size, refs, record)
     }
 
     const body: any = {
       model,
       prompt: record.prompt,
       size,
-      n: 1,
+      n: this.normalizeImageCount(record.n),
     }
 
-    if (!isGptImage) {
+    if (record.quality) body.quality = record.quality
+    if (record.moderation) body.moderation = record.moderation
+    if (record.format) body.format = record.format
+    if (record.responseFormat) {
+      body.response_format = record.responseFormat
+    } else if (!isGptImage) {
       body.response_format = 'url'
     }
 
@@ -77,12 +85,16 @@ export class OpenAIImageAdapter implements ImageProviderAdapter {
     prompt: string | null | undefined,
     size: string,
     refs: string[],
+    options: ImageGenerationRecord,
   ): ProviderRequest {
     const form = new FormData()
     form.append('model', model)
     form.append('prompt', prompt || '')
     form.append('size', size)
-    form.append('n', '1')
+    form.append('n', String(this.normalizeImageCount(options.n)))
+    if (options.quality) form.append('quality', options.quality)
+    if (options.moderation) form.append('moderation', options.moderation)
+    if (options.responseFormat) form.append('response_format', options.responseFormat)
 
     let appended = 0
     for (const ref of refs) {
@@ -136,11 +148,14 @@ export class OpenAIImageAdapter implements ImageProviderAdapter {
     return Math.max(multiple, Math.round(value / multiple) * multiple)
   }
 
+  private normalizeImageCount(value?: number | null): number {
+    const count = Number(value || 1)
+    if (!Number.isFinite(count)) return 1
+    return Math.min(10, Math.max(1, Math.trunc(count)))
+  }
+
   parseGenerateResponse(result: any): ImageGenResponse {
     // OpenAI DALL-E 3 目前是同步返回，但规范上也有异步 task 模式
-    if (result.task_id || result.id) {
-      return { isAsync: true, taskId: result.task_id || result.id }
-    }
     const imageUrl = result.data?.[0]?.url || result.url
     if (imageUrl) {
       return { isAsync: false, imageUrl }
@@ -150,6 +165,9 @@ export class OpenAIImageAdapter implements ImageProviderAdapter {
     if (b64) {
       // 对于 base64，返回特殊标记，实际处理在 extractImageBase64
       return { isAsync: false, imageUrl: undefined }
+    }
+    if (result.task_id || (result.id && result.status)) {
+      return { isAsync: true, taskId: result.task_id || result.id }
     }
     throw new Error('No image URL in response')
   }

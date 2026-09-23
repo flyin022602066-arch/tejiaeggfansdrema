@@ -31,6 +31,7 @@ const STORAGE_CONFIG_FILE = 'storage-config.json'
 
 let mainWindow: BrowserWindow | null = null
 let backend: UtilityProcess | null = null
+let backendLogStream: fs.WriteStream | null = null
 let quitting = false
 let backendRestarting = false
 let backendPort = 0
@@ -40,7 +41,7 @@ let currentDataDir = ''
 // 不依赖 package.json 命名（打包后与 dev 同名会导致单实例锁误杀）
 app.setPath('userData', path.join(
   app.getPath('appData'),
-  app.isPackaged ? 'HuobaoDrama' : 'HuobaoDrama-Dev',
+  app.isPackaged ? 'Eggfans' : 'Eggfans-Dev',
 ))
 
 if (!app.requestSingleInstanceLock()) {
@@ -94,7 +95,9 @@ function storageConfigPath(): string {
  * （不改写坏文件，保留现场）；目录创建失败（盘不在/权限）→warn+默认。永不阻断启动。
  */
 function loadStorageConfig(): string {
-  const fallback = path.join(app.getPath('userData'), 'data')
+  // In development, keep using the repository data directory so the desktop
+  // shell opens the same local projects as the backend/CLI.
+  const fallback = app.isPackaged ? path.join(app.getPath('userData'), 'data') : path.join(REPO_ROOT, 'data')
   const file = storageConfigPath()
   if (!fs.existsSync(file)) return fallback
   try {
@@ -155,6 +158,8 @@ function stopBackend(): Promise<void> {
     const timer = setTimeout(() => cur.kill(), 5000)
     cur.once('exit', () => {
       clearTimeout(timer)
+      backendLogStream?.end()
+      backendLogStream = null
       resolve()
     })
     cur.kill()
@@ -163,13 +168,26 @@ function stopBackend(): Promise<void> {
 
 function startBackend(): void {
   const resources = resolveResourceDir()
+  // Keep compatibility with the pre-4.0 workspace, which stored the SQLite
+  // database as drama_generator.db. Prefer a populated legacy database over
+  // the newly-created empty huobao.sqlite3 so existing projects remain visible.
+  const modernDb = path.join(currentDataDir, 'huobao.sqlite3')
+  const legacyDb = path.join(currentDataDir, 'drama_generator.db')
+  const sqlitePath = fs.existsSync(legacyDb) && (!fs.existsSync(modernDb) || fs.statSync(legacyDb).size > fs.statSync(modernDb).size * 10)
+    ? legacyDb
+    : modernDb
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    // Backend stdout is piped into Electron's console; keep logs UTF-8 and
+    // disable colour escapes unless explicitly requested for an interactive TTY.
+    FORCE_COLOR: process.env.FORCE_COLOR || '0',
+    LANG: process.env.LANG || 'zh_CN.UTF-8',
+    LC_ALL: process.env.LC_ALL || 'zh_CN.UTF-8',
     PORT: String(backendPort),
     HUOBAO_DESKTOP: '1',
     // 数据目录单一来源：重启/迁移后只需改 currentDataDir
     HUOBAO_DATA_DIR: currentDataDir,
-    SQLITE_PATH: path.join(currentDataDir, 'huobao.sqlite3'),
+    SQLITE_PATH: sqlitePath,
     WORKSPACE_PATH: currentWorkspaceDir,
     FRONTEND_DIST: currentFrontendDist,
   }
@@ -177,6 +195,24 @@ function startBackend(): void {
     const exe = process.platform === 'win32' ? '.exe' : ''
     env.FFMPEG_BIN = path.join(resources, 'bin', `ffmpeg${exe}`)
     env.FFPROBE_BIN = path.join(resources, 'bin', `ffprobe${exe}`)
+  } else {
+    // 开发版后端是从 desktop/build 启动的 bundle，createRequire 会优先解析
+    // desktop/node_modules。该目录可能只装了包壳而没有下载 ffmpeg.exe，
+    // 因此明确使用 backend/node_modules 中随服务端依赖安装的本机二进制。
+    const exe = process.platform === 'win32' ? '.exe' : ''
+    const ffmpegDev = path.join(REPO_ROOT, 'backend', 'node_modules', 'ffmpeg-static', `ffmpeg${exe}`)
+    const ffprobeDev = path.join(
+      REPO_ROOT,
+      'backend',
+      'node_modules',
+      'ffprobe-static',
+      'bin',
+      process.platform,
+      process.arch,
+      `ffprobe${exe}`,
+    )
+    if (fs.existsSync(ffmpegDev)) env.FFMPEG_BIN = ffmpegDev
+    if (fs.existsSync(ffprobeDev)) env.FFPROBE_BIN = ffprobeDev
   }
 
   backend = utilityProcess.fork(BACKEND_BUNDLE, [], {
@@ -185,8 +221,14 @@ function startBackend(): void {
     stdio: 'pipe',
   })
   console.log(`[main] backend forked from ${BACKEND_BUNDLE}`)
-  backend.stdout?.on('data', chunk => process.stdout.write(`[backend] ${chunk}`))
-  backend.stderr?.on('data', chunk => process.stderr.write(`[backend] ${chunk}`))
+  // Backend output is UTF-8. Forwarding those bytes directly to a legacy
+  // Windows console code page renders Chinese as mojibake and ANSI escapes as
+  // literal boxes. Keep a readable UTF-8 diagnostic log instead.
+  const logDir = path.join(currentDataDir, 'logs')
+  fs.mkdirSync(logDir, { recursive: true })
+  backendLogStream = fs.createWriteStream(path.join(logDir, 'backend.log'), { flags: 'a', encoding: 'utf8' })
+  backend.stdout?.on('data', chunk => backendLogStream?.write(chunk))
+  backend.stderr?.on('data', chunk => backendLogStream?.write(chunk))
   backend.on('exit', code => {
     backend = null
     // 迁移/重启期间的退出是预期行为，由调用方接管
@@ -203,7 +245,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
-    title: '火宝短剧',
+    title: 'Eggfans',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

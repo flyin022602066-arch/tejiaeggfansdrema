@@ -1,13 +1,17 @@
 import type { MiddlewareHandler } from 'hono'
 
+// Electron pipes backend output to the parent process. ANSI escape sequences
+// are useful in an interactive terminal, but become literal "[36m" noise in
+// the Windows console when stdout is a pipe.
+const useColors = process.env.FORCE_COLOR === '1' || !!process.stdout.isTTY
 const colors = {
-  reset: '\x1b[0m',
-  dim: '\x1b[2m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  red: '\x1b[31m',
-  cyan: '\x1b[36m',
-  magenta: '\x1b[35m',
+  reset: useColors ? '\x1b[0m' : '',
+  dim: useColors ? '\x1b[2m' : '',
+  green: useColors ? '\x1b[32m' : '',
+  yellow: useColors ? '\x1b[33m' : '',
+  red: useColors ? '\x1b[31m' : '',
+  cyan: useColors ? '\x1b[36m' : '',
+  magenta: useColors ? '\x1b[35m' : '',
 }
 
 function statusColor(status: number): string {
