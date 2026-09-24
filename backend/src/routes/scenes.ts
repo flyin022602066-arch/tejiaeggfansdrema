@@ -10,6 +10,7 @@ import { ensureSceneFinalPrompt } from '../services/final-prompt.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
+const SCENE_IMAGE_SIZE = '3840x2160'
 
 // GET /scenes/:id - refresh one asset card without reloading the workbench
 app.get('/:id', async (c) => {
@@ -102,7 +103,7 @@ app.post('/:id/generate-image', async (c) => {
   try {
     logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location })
     await db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id))
-    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, model: body.model, size: body.size, quality: body.quality, moderation: body.moderation, format: body.format, responseFormat: body.response_format, n: body.n, configId: body.config_id ?? ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, model: body.model, size: body.size || SCENE_IMAGE_SIZE, quality: body.quality, moderation: body.moderation, format: body.format, responseFormat: body.response_format, n: body.n, configId: body.config_id ?? ep.imageConfigId ?? undefined })
     logTaskSuccess('SceneImage', 'generate', { sceneId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

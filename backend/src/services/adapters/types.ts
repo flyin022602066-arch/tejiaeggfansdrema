@@ -117,6 +117,7 @@ export interface VideoGenerationRecord {
   seed?: number | null
   promptExtend?: number | boolean | null
   watermark?: number | boolean | null
+  face?: number | boolean | null
   // ... 其他字段
 }
 

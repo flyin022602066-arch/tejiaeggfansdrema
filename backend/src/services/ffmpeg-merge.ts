@@ -7,10 +7,11 @@ import { v4 as uuid } from 'uuid'
 import { db, getInsertId, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
-import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+import { logTaskError, logTaskStart, logTaskSuccess, logTaskWarn } from '../utils/task-logger.js'
 import { extractVideoPoster } from '../utils/video-poster.js'
 import { ffmpeg, checkFfmpegSuite } from '../utils/ffmpeg.js'
 import { DATA_ROOT, STORAGE_ROOT } from '../utils/paths.js'
+import { copyMediaToOutput } from '../utils/output.js'
 
 function toAbsPath(relativePath: string): string {
   if (path.isAbsolute(relativePath)) return relativePath
@@ -134,6 +135,13 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   // 成片海报帧（导出页封面用）
   await extractVideoPoster(mergedRelative)
 
+  let exportedPath: string | null = null
+  try {
+    exportedPath = await copyMediaToOutput(mergedRelative, 'videos')
+  } catch (error) {
+    logTaskWarn('MergeTask', 'output-copy-failed', { mergeId, episodeId, error: (error as Error).message })
+  }
+
   // 更新 merge 记录
   await db.update(schema.videoMerges)
     .set({ status: 'completed', mergedUrl: mergedRelative, duration, completedAt: now() })
@@ -143,8 +151,7 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   await db.update(schema.episodes)
     .set({ videoUrl: mergedRelative, updatedAt: now() })
     .where(eq(schema.episodes.id, episodeId))
-
-  logTaskSuccess('MergeTask', 'episode-merge', { mergeId, episodeId, output: mergedRelative, duration, clips: videos.length })
+  logTaskSuccess('MergeTask', 'episode-merge', { mergeId, episodeId, output: mergedRelative, exportedPath, duration, clips: videos.length })
 }
 
 function getVideoDuration(filePath: string): Promise<number> {

@@ -17,11 +17,18 @@ test('asset tables persist a separate public image-host URL', () => {
 
 test('manual image upload returns a public URL and supports retry', () => {
   const upload = read('src/routes/upload.ts')
+  const episode = read('../frontend/app/views/drama/episode.vue')
 
   assert.match(upload, /uploadFileToImageHost\(path, file\.type \|\| 'image\/png'\)/)
   assert.match(upload, /public_url: publicUrl \|\| null/)
   assert.match(upload, /app\.post\('\/asset-public-url'/)
   assert.match(upload, /saveAssetPublicUrl\(kind, id, publicUrl\)/)
+  assert.match(episode, /assetImageSrc\(c\)/)
+  assert.match(episode, /assetImageSrc\(s\)/)
+  assert.match(episode, /assetImageSrc\(p\)/)
+  assert.match(episode, /retryAssetPublicUpload\('character', c\.id\)/)
+  assert.match(episode, /retryAssetPublicUpload\('scene', s\.id\)/)
+  assert.match(episode, /retryAssetPublicUpload\('prop', p\.id\)/)
 })
 
 test('generated assets upload to the image host without failing local completion', () => {

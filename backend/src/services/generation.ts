@@ -15,6 +15,7 @@ import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuc
 import { isPublicHttpUrl } from './uguu.js'
 import { uploadFileToImageHost } from './image-host.js'
 import { mapStoryboardCharacterReferencesToUris } from './virtual-assets.js'
+import { copyMediaToOutput } from '../utils/output.js'
 import {
   normalizeVideoAssetReferenceMode,
   resolveSdReferenceImages,
@@ -75,6 +76,7 @@ interface GenerateVideoParams {
   seed?: number
   promptExtend?: boolean
   watermark?: boolean
+  face?: boolean
   assetReferenceMode?: VideoAssetReferenceMode
   configId?: number
 }
@@ -160,6 +162,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     seed: params.seed,
     promptExtend: params.promptExtend,
     watermark: params.watermark,
+    face: params.face === true,
     assetReferenceMode: normalizeVideoAssetReferenceMode(params.assetReferenceMode),
   })
 
@@ -317,6 +320,7 @@ async function processTask(id: number, config: AIConfig) {
         seed: params.seed,
         promptExtend: params.promptExtend,
         watermark: params.watermark,
+        face: params.face,
       }))
     }
 
@@ -496,11 +500,13 @@ async function handleImageComplete(record: SysTaskRecord, imageUrl: string) {
   // secondary step and must not delay the asset card or task completion.
   await writeBackImageAssets(record, localPath, null)
 
+  const outputPath = await copyImageToOutput(record, localPath)
+
   await db.update(schema.sysTask)
     .set({ resultUrl: imageUrl, localPath, status: 'completed', completedAt: now(), updatedAt: now() })
     .where(eq(schema.sysTask.id, record.id))
 
-  logTaskSuccess('ImageTask', 'downloaded', { id: record.id, provider: record.provider, localPath })
+  logTaskSuccess('ImageTask', 'downloaded', { id: record.id, provider: record.provider, localPath, outputPath })
 
   const publicUrl = await uploadGeneratedAssetToImageHost(record, localPath)
   if (publicUrl) await writeBackImageAssets(record, localPath, publicUrl)
@@ -511,14 +517,24 @@ async function handleImageCompleteBase64(record: SysTaskRecord, base64Data: stri
   await generateImageThumb(localPath)
   await writeBackImageAssets(record, localPath, null)
 
+  const outputPath = await copyImageToOutput(record, localPath)
   await db.update(schema.sysTask)
     .set({ localPath, status: 'completed', completedAt: now(), updatedAt: now() })
     .where(eq(schema.sysTask.id, record.id))
 
-  logTaskSuccess('ImageTask', 'saved-base64', { id: record.id, provider: record.provider, mimeType, localPath })
+  logTaskSuccess('ImageTask', 'saved-base64', { id: record.id, provider: record.provider, mimeType, localPath, outputPath })
 
   const publicUrl = await uploadGeneratedAssetToImageHost(record, localPath)
   if (publicUrl) await writeBackImageAssets(record, localPath, publicUrl)
+}
+
+async function copyImageToOutput(record: SysTaskRecord, localPath: string): Promise<string | null> {
+  try {
+    return await copyMediaToOutput(localPath, 'assets')
+  } catch (error) {
+    logTaskWarn('ImageTask', 'output-copy-failed', { id: record.id, localPath, error: (error as Error).message })
+    return null
+  }
 }
 
 async function uploadGeneratedAssetToImageHost(record: SysTaskRecord, localPath: string): Promise<string | null> {
@@ -567,11 +583,17 @@ async function handleVideoComplete(record: SysTaskRecord, videoUrl: string, dura
   const localPath = await downloadFile(videoUrl, 'videos')
   // 海报帧供列表/封面展示，避免前端为显示首帧缓冲整个视频
   await extractVideoPoster(localPath)
+  let outputPath: string | null = null
+  try {
+    outputPath = await copyMediaToOutput(localPath, 'videos')
+  } catch (error) {
+    logTaskWarn('VideoTask', 'output-copy-failed', { id: record.id, localPath, error: (error as Error).message })
+  }
   await db.update(schema.sysTask)
     .set({ resultUrl: videoUrl, localPath, status: 'completed', completedAt: now(), updatedAt: now() })
     .where(eq(schema.sysTask.id, record.id))
 
-  logTaskSuccess('VideoTask', 'downloaded', { id: record.id, localPath, storyboardId: record.storyboardId, duration })
+  logTaskSuccess('VideoTask', 'downloaded', { id: record.id, localPath, outputPath, storyboardId: record.storyboardId, duration })
 
   if (record.storyboardId) {
     await db.update(schema.storyboards)

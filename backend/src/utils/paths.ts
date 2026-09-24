@@ -21,3 +21,5 @@ export const DATA_ROOT = process.env.HUOBAO_DATA_DIR
     : path.join(repoRoot, 'data'))
 
 export const STORAGE_ROOT = process.env.STORAGE_PATH ?? path.join(DATA_ROOT, 'static')
+
+export const OUTPUT_ROOT = process.env.HUOBAO_OUTPUT_DIR ?? path.join(repoRoot, 'output')

@@ -147,6 +147,7 @@ export class EggfansVideoAdapter implements VideoProviderAdapter {
         resolution: EGGFANS_VIDEO_RESOLUTION,
         aspect_ratio: record.aspectRatio || '16:9',
       }
+      if ((referenceImages.length || firstImage) && (record.face === true || record.face === 1)) body.face = true
       if (referenceImages.length) body.image_refs = referenceImages
       if (referenceVideos.length) body.video_refs = referenceVideos
       if (referenceAudios.length) body.audio_refs = referenceAudios

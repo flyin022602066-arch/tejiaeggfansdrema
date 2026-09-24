@@ -63,6 +63,7 @@ function normalizeVideoRequest(body: any) {
     seed: body.seed ?? parameters.seed,
     prompt_extend: body.prompt_extend ?? parameters.prompt_extend,
     watermark: body.watermark ?? parameters.watermark,
+    face: body.face ?? parameters.face ?? false,
     asset_reference_mode: body.asset_reference_mode ?? parameters.asset_reference_mode ?? 'uri',
     official_media: media,
   }
@@ -229,6 +230,7 @@ app.post('/', async (c) => {
         seed: videoBody!.seed,
         promptExtend: videoBody!.prompt_extend,
         watermark: videoBody!.watermark,
+        face: videoBody!.face,
         assetReferenceMode: videoBody!.asset_reference_mode,
         configId,
       })

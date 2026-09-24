@@ -391,7 +391,10 @@
                     </span>
                   </div>
                   <a v-if="matPublicUrl(editTarget)" :href="matPublicUrl(editTarget)" target="_blank" rel="noopener" class="mat-detail-public-link">{{ matPublicUrl(editTarget) }}</a>
-                  <div v-else class="mat-detail-public-empty">
+                  <button v-if="matHasImage(editTarget)" class="btn btn-sm" :disabled="isUploadingPublic(editTarget)" @click="retryMaterialPublicUrl(editTarget)">
+                    {{ isUploadingPublic(editTarget) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
+                  </button>
+                  <div v-if="!matPublicUrl(editTarget) && !matHasImage(editTarget)" class="mat-detail-public-empty">
                     <span>{{ matHasImage(editTarget) ? t('episode.asset.publicUrlRetryHint') : t('episode.asset.publicUrlImageFirst') }}</span>
                     <button v-if="matHasImage(editTarget)" class="btn btn-sm" :disabled="isUploadingPublic(editTarget)" @click="retryMaterialPublicUrl(editTarget)">
                       {{ isUploadingPublic(editTarget) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}

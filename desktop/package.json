@@ -7,13 +7,14 @@
   "author": "Eggfans",
   "main": "dist/main.js",
   "scripts": {
+    "build:frontend": "cd ../frontend && npm run generate",
     "build:backend": "node scripts/build-backend.mjs",
     "build:main": "node scripts/build-main.mjs",
     "rebuild:native": "electron-builder install-app-deps",
     "postinstall": "electron-builder install-app-deps",
-    "dev": "npm run build:backend && npm run build:main && electron .",
-    "dist": "npm run build:backend && npm run build:main && node scripts/prepare-resources.mjs && electron-builder --mac",
-    "dist:win": "npm run build:backend && npm run build:main && node scripts/prepare-resources.mjs && electron-builder --win",
+    "dev": "npm run build:frontend && npm run build:backend && npm run build:main && electron .",
+    "dist": "npm run build:frontend && npm run build:backend && npm run build:main && node scripts/prepare-resources.mjs && electron-builder --mac",
+    "dist:win": "npm run build:frontend && npm run build:backend && npm run build:main && node scripts/prepare-resources.mjs && electron-builder --win",
     "feed": "node scripts/make-update-feed.mjs",
     "publish": "node scripts/publish-release.mjs"
   },

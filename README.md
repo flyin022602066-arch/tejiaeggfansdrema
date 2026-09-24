@@ -37,6 +37,8 @@ npm run dev:desktop
 
 The desktop command builds the bundled backend and opens the Eggfans window. The backend uses local SQLite and local filesystem storage; Docker is not required.
 
+Generated images (including storyboards and character/scene/prop assets) are automatically copied to `output/assets/`. Generated clips and merged episode videos are copied to `output/videos/`. The folders are created when the first result is ready; the original files remain in `data/static/` for playback. In a packaged desktop installation, `output/` is placed under Eggfans' writable user-data directory instead of the protected installation directory. Set `HUOBAO_OUTPUT_DIR` to override the destination for a standalone backend.
+
 Useful checks:
 
 ```powershell

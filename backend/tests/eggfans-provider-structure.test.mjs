@@ -86,6 +86,8 @@ test('workbench exposes and persists the project-wide video aspect ratio', () =>
 
 test('asset image controls default to documented 4K high quality and low moderation', () => {
   assert.match(episode, /size:\s*'3840x2160'/)
+  assert.match(episode, /IMAGE_PARAMS_KEY = 'eggfans:asset-image-params:v3'/)
+  assert.match(episode, /placeholder="3840x2160"/)
   assert.match(episode, /quality:\s*'high'/)
   assert.match(episode, /moderation:\s*'low'/)
   assert.match(episode, /v-model="batchImageParams\.moderation"/)

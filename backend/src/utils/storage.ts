@@ -14,13 +14,12 @@ export async function downloadFile(url: string, subDir: string): Promise<string>
   const dir = path.join(STORAGE_ROOT, subDir)
   fs.mkdirSync(dir, { recursive: true })
 
-  const ext = getExtFromUrl(url)
-  const filename = `${uuid()}${ext}`
-  const filePath = path.join(dir, filename)
-
   const resp = await fetch(url)
   if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
 
+  const ext = getExtFromUrl(url, subDir, resp.headers.get('content-type'))
+  const filename = `${uuid()}${ext}`
+  const filePath = path.join(dir, filename)
   const buffer = Buffer.from(await resp.arrayBuffer())
   fs.writeFileSync(filePath, buffer)
 
@@ -43,13 +42,23 @@ export async function saveUploadedFile(data: ArrayBuffer, subDir: string, origin
   return `static/${subDir}/${filename}`
 }
 
-function getExtFromUrl(url: string): string {
+function getExtFromUrl(url: string, subDir: string, contentType: string | null): string {
   try {
     const pathname = new URL(url).pathname
     const ext = path.extname(pathname)
-    if (ext && ext.length <= 5) return ext
+    if (ext && ext.length <= 5 && ext.toLowerCase() !== '.bin') return ext
   } catch {}
-  return '.bin'
+  const mime = contentType?.split(';')[0].trim().toLowerCase()
+  const byMime: Record<string, string> = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+  }
+  return byMime[mime || ''] || (subDir === 'images' ? '.png' : subDir === 'videos' ? '.mp4' : '.bin')
 }
 
 /**

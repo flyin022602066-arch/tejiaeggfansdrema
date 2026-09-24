@@ -66,6 +66,17 @@
               >{{ t('episode.vid.referenceModeUrl') }}</button>
             </div>
           </div>
+          <div class="video-face-toggle" aria-label="face=true">
+            <span class="video-reference-mode-label">face=true</span>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: videoFaceEnabled }"
+              :aria-pressed="videoFaceEnabled"
+              title="Enable face=true for image references"
+              @click="videoFaceEnabled = !videoFaceEnabled"
+            />
+          </div>
           <ModelSelect
             v-model="dramaAspectRatio"
             :label="t('episode.topbar.aspectRatio')"
@@ -396,7 +407,7 @@
                     <span class="asset-public-label">{{ t('episode.asset.publicUrl') }}</span>
                     <a v-if="assetPublicUrl(c)" :href="assetPublicUrl(c)" target="_blank" rel="noopener" class="asset-public-link" :title="assetPublicUrl(c)">{{ assetPublicUrl(c) }}</a>
                     <span v-else class="asset-public-missing">{{ t('episode.asset.publicUrlMissing') }}</span>
-                    <button v-if="assetImageSrc(c) && !assetPublicUrl(c)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('character', c.id)" @click.stop="retryAssetPublicUpload('character', c.id)">
+                    <button v-if="assetImageSrc(c)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('character', c.id)" @click.stop="retryAssetPublicUpload('character', c.id)">
                       <Loader2 v-if="isUploadingPublicAsset('character', c.id)" :size="10" class="animate-spin" />
                       {{ isUploadingPublicAsset('character', c.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
                     </button>
@@ -467,7 +478,7 @@
                     <span class="asset-public-label">{{ t('episode.asset.publicUrl') }}</span>
                     <a v-if="assetPublicUrl(s)" :href="assetPublicUrl(s)" target="_blank" rel="noopener" class="asset-public-link" :title="assetPublicUrl(s)">{{ assetPublicUrl(s) }}</a>
                     <span v-else class="asset-public-missing">{{ t('episode.asset.publicUrlMissing') }}</span>
-                    <button v-if="assetImageSrc(s) && !assetPublicUrl(s)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('scene', s.id)" @click.stop="retryAssetPublicUpload('scene', s.id)">
+                    <button v-if="assetImageSrc(s)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('scene', s.id)" @click.stop="retryAssetPublicUpload('scene', s.id)">
                       <Loader2 v-if="isUploadingPublicAsset('scene', s.id)" :size="10" class="animate-spin" />
                       {{ isUploadingPublicAsset('scene', s.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
                     </button>
@@ -533,7 +544,7 @@
                     <span class="asset-public-label">{{ t('episode.asset.publicUrl') }}</span>
                     <a v-if="assetPublicUrl(p)" :href="assetPublicUrl(p)" target="_blank" rel="noopener" class="asset-public-link" :title="assetPublicUrl(p)">{{ assetPublicUrl(p) }}</a>
                     <span v-else class="asset-public-missing">{{ t('episode.asset.publicUrlMissing') }}</span>
-                    <button v-if="assetImageSrc(p) && !assetPublicUrl(p)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('prop', p.id)" @click.stop="retryAssetPublicUpload('prop', p.id)">
+                    <button v-if="assetImageSrc(p)" class="btn btn-ghost btn-sm asset-public-action" :disabled="isUploadingPublicAsset('prop', p.id)" @click.stop="retryAssetPublicUpload('prop', p.id)">
                       <Loader2 v-if="isUploadingPublicAsset('prop', p.id)" :size="10" class="animate-spin" />
                       {{ isUploadingPublicAsset('prop', p.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
                     </button>
@@ -1224,17 +1235,17 @@
                     class="asset-detail-public-link"
                     :title="assetPublicUrl(assetDetail.item)"
                   >{{ assetPublicUrl(assetDetail.item) }}</a>
-                  <div v-else class="asset-detail-public-empty">
+                  <button
+                    v-if="assetImageSrc(assetDetail.item)"
+                    class="btn btn-sm"
+                    :disabled="isUploadingPublicAsset(assetDetail.type, assetDetail.item.id)"
+                    @click="retryAssetPublicUpload(assetDetail.type, assetDetail.item.id)"
+                  >
+                    <Loader2 v-if="isUploadingPublicAsset(assetDetail.type, assetDetail.item.id)" :size="11" class="animate-spin" />
+                    {{ isUploadingPublicAsset(assetDetail.type, assetDetail.item.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
+                  </button>
+                  <div v-if="!assetPublicUrl(assetDetail.item) && !assetImageSrc(assetDetail.item)" class="asset-detail-public-empty">
                     <span>{{ assetImageSrc(assetDetail.item) ? t('episode.asset.publicUrlRetryHint') : t('episode.asset.publicUrlImageFirst') }}</span>
-                    <button
-                      v-if="assetImageSrc(assetDetail.item)"
-                      class="btn btn-sm"
-                      :disabled="isUploadingPublicAsset(assetDetail.type, assetDetail.item.id)"
-                      @click="retryAssetPublicUpload(assetDetail.type, assetDetail.item.id)"
-                    >
-                      <Loader2 v-if="isUploadingPublicAsset(assetDetail.type, assetDetail.item.id)" :size="11" class="animate-spin" />
-                      {{ isUploadingPublicAsset(assetDetail.type, assetDetail.item.id) ? t('episode.asset.uploadingPublic') : t('episode.asset.uploadPublic') }}
-                    </button>
                   </div>
                 </div>
                 <div v-if="assetDetail.type === 'character'" class="asset-detail-public">
@@ -1535,7 +1546,7 @@
             <div class="image-params-grid">
               <label class="field">
                 <span class="field-label">{{ t('episode.image.size') }}</span>
-                <input v-model.trim="batchImageParams.size" class="input mono" list="asset-image-size-options" placeholder="1024x1024" />
+                <input v-model.trim="batchImageParams.size" class="input mono" list="asset-image-size-options" placeholder="3840x2160" />
                 <datalist id="asset-image-size-options">
                   <option value="1024x1024" />
                   <option value="1536x1024" />
@@ -1813,6 +1824,7 @@ const videoModel = ref(storedModels.video || '')
 const videoAssetReferenceMode = ref('uri')
 const videoAssetReferenceModeReady = ref(false)
 const videoAssetReferenceModeSaving = ref(false)
+const videoFaceEnabled = ref(false)
 let videoAssetReferenceModePromise = null
 
 async function loadVideoAssetReferenceMode() {
@@ -1848,7 +1860,7 @@ async function changeVideoAssetReferenceMode(mode) {
     videoAssetReferenceModeSaving.value = false
   }
 }
-const IMAGE_PARAMS_KEY = 'eggfans:asset-image-params:v2'
+const IMAGE_PARAMS_KEY = 'eggfans:asset-image-params:v3'
 const DEFAULT_IMAGE_PARAMS = Object.freeze({
   size: '3840x2160',
   n: 1,
@@ -3818,6 +3830,7 @@ async function genVid(sb, opts = {}) {
     config_id: ownerConfigId(videoModelOptions.value, videoModel.value),
     reference_image_urls: referenceImages,
     asset_reference_mode: videoAssetReferenceMode.value,
+    ...(videoFaceEnabled.value ? { face: true } : {}),
   }
   if (!params.prompt && !referenceImages.length) {
     toast.error(t('episode.vid.needRefOrPrompt'))
@@ -5006,6 +5019,17 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
   cursor: wait;
   opacity: 0.62;
 }
+.video-face-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--surface-outline);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+.video-face-toggle .switch { flex-shrink: 0; }
 .asset-final-prompt {
   display: flex;
   flex-direction: column;

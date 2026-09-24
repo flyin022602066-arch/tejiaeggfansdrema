@@ -185,9 +185,9 @@ export class GeminiImageAdapter implements ImageProviderAdapter {
   }
 
   private parseImageSize(size?: string | null): string {
-    if (!size) return '1K'
+    if (!size) return '4K'
     const [w] = size.split('x').map(Number)
-    if (!w) return '1K'
+    if (!w) return '4K'
     if (w >= 2048) return '4K'
     if (w >= 1024) return '2K'
     if (w >= 512) return '1K'

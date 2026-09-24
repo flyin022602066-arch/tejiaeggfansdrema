@@ -166,6 +166,7 @@ test('EggFans standard video honors configured create and query endpoints', () =
     referenceVideoUrls: JSON.stringify(['https://assets.example/ref.mp4']),
     referenceAudioUrls: JSON.stringify(['https://assets.example/ref.mp3']),
     generateAudio: true,
+    face: true,
   })
 
   assert.equal(request.url, 'https://vip.eggfans.asia/v1/videos')
@@ -176,6 +177,7 @@ test('EggFans standard video honors configured create and query endpoints', () =
   assert.deepEqual(request.body.image_refs, ['https://assets.example/ref.png'])
   assert.deepEqual(request.body.video_refs, ['https://assets.example/ref.mp4'])
   assert.deepEqual(request.body.audio_refs, ['https://assets.example/ref.mp3'])
+  assert.equal(request.body.face, true)
   assert.equal('generate_audio' in request.body, false)
   assert.equal(
     adapter.buildPollRequest(config, 'task/123').url,
@@ -185,6 +187,33 @@ test('EggFans standard video honors configured create and query endpoints', () =
     isAsync: true,
     taskId: 'task-1',
   })
+})
+
+test('EggFans standard video omits face when the reference switch is disabled', () => {
+  const request = new EggfansVideoAdapter().buildGenerateRequest(config, {
+    id: 4,
+    model: 'sd-2.5-C',
+    prompt: 'face switch off',
+    duration: 4,
+    resolution: '720p',
+    referenceImageUrls: JSON.stringify(['https://assets.example/ref.png']),
+    face: false,
+  })
+
+  assert.equal('face' in request.body, false)
+})
+
+test('EggFans standard video keeps face disabled when no switch value is provided', () => {
+  const request = new EggfansVideoAdapter().buildGenerateRequest(config, {
+    id: 5,
+    model: 'sd-2.5-C',
+    prompt: 'face switch default',
+    duration: 4,
+    resolution: '720p',
+    referenceImageUrls: JSON.stringify(['https://assets.example/ref.png']),
+  })
+
+  assert.equal('face' in request.body, false)
 })
 
 test('EggFans sd video preserves character virtual asset URIs in image_refs', () => {

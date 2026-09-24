@@ -187,6 +187,7 @@ function startBackend(): void {
     HUOBAO_DESKTOP: '1',
     // 数据目录单一来源：重启/迁移后只需改 currentDataDir
     HUOBAO_DATA_DIR: currentDataDir,
+    HUOBAO_OUTPUT_DIR: path.join(app.isPackaged ? app.getPath('userData') : REPO_ROOT, 'output'),
     SQLITE_PATH: sqlitePath,
     WORKSPACE_PATH: currentWorkspaceDir,
     FRONTEND_DIST: currentFrontendDist,
